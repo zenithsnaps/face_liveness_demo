@@ -45,4 +45,9 @@ class AppStrings {
   static const String stepFrame = 'จัดใบหน้า';
   static const String stepLiveness = 'ยิ้ม & กระพริบตา';
   static const String stepOcclusion = 'ตรวจการบัง';
+
+  // Cloud sync status (shown on ResultScreen)
+  static const String cloudSaving = 'กำลังบันทึกขึ้น cloud...';
+  static const String cloudSaved = 'บันทึกขึ้น cloud แล้ว';
+  static const String cloudSyncFailed = 'บันทึกขึ้น cloud ไม่สำเร็จ';
 }

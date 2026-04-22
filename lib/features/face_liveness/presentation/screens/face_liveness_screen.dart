@@ -13,6 +13,7 @@ import '../../domain/entities/face_snapshot.dart';
 import '../../domain/entities/frame_data.dart';
 import '../../domain/entities/liveness_gate.dart';
 import '../../domain/failures/liveness_failure.dart';
+import '../../domain/repositories/liveness_result_repository.dart';
 import '../../domain/value_objects/rect2d.dart';
 import '../../infrastructure/camera/camera_frame_source.dart';
 import '../../infrastructure/image/jpeg_frame_decoder.dart';
@@ -34,6 +35,7 @@ class _FaceLivenessScreenState extends ConsumerState<FaceLivenessScreen>
     with WidgetsBindingObserver {
   bool _processing = false;
   bool _initialized = false;
+  bool _gatePersisted = false;
   Timer? _gateTimeout;
   late final CameraFrameSource _cameraSource;
 
@@ -71,8 +73,10 @@ class _FaceLivenessScreenState extends ConsumerState<FaceLivenessScreen>
   }
 
   Future<void> _bootstrap() async {
+    _gatePersisted = false;
     final controller = ref.read(flowControllerProvider.notifier);
     controller.dispatch(const StartRequested());
+    ref.read(attemptDraftProvider.notifier).startNew();
     final camera = ref.read(cameraSourceProvider);
     try {
       // Initialize camera + MediaPipe (face detector + hand landmarker loaded).
@@ -124,7 +128,8 @@ class _FaceLivenessScreenState extends ConsumerState<FaceLivenessScreen>
 
     if (!mounted) return;
 
-    final ovalGuide = _ovalGuideInFrameSpace(image.width, image.height);
+    final ovalGuide = _ovalGuideInFrameSpace(
+        image.width, image.height, frame.metadata.rotationDegrees);
     final input = PipelineFrameInput(
       face: face,
       hands: const [],
@@ -150,11 +155,19 @@ class _FaceLivenessScreenState extends ConsumerState<FaceLivenessScreen>
   }
 
   /// Build a Rect2D in the camera frame's coordinate space that corresponds
-  /// to the on-screen oval. Since the preview aspect differs from the oval,
-  /// we approximate using the oval occupying 70% of frame width and centered.
-  Rect2D _ovalGuideInFrameSpace(int frameWidth, int frameHeight) {
-    final w = frameWidth * 0.7;
-    final h = frameHeight * 0.55;
+  /// to the on-screen oval.
+  ///
+  /// On Android the sensor delivers a landscape frame (width > height) that is
+  /// rotated 90°/270° before display.  In that case face.bbox.width (frame X)
+  /// maps to the VERTICAL direction on screen, so the oval "width" we compare
+  /// it against must use the screen oval's HEIGHT ratio (0.55), not the width
+  /// ratio (0.70).  The height dimension in the oval guide likewise uses 0.70
+  /// (the screen oval width ratio, which maps to frame Y → screen X).
+  Rect2D _ovalGuideInFrameSpace(
+      int frameWidth, int frameHeight, int rotationDegrees) {
+    final bool rotated = rotationDegrees == 90 || rotationDegrees == 270;
+    final w = frameWidth * (rotated ? 0.55 : 0.70);
+    final h = frameHeight * (rotated ? 0.70 : 0.55);
     final left = (frameWidth - w) / 2;
     final top = (frameHeight - h) / 2 - frameHeight * 0.05;
     return Rect2D.fromLTWH(left, top, w, h);
@@ -204,8 +217,50 @@ class _FaceLivenessScreenState extends ConsumerState<FaceLivenessScreen>
     );
   }
 
+  Future<void> _persistGateFailure(FlowFailed flow) async {
+    final repo = ref.read(livenessResultRepositoryProvider);
+    if (repo == null) return;
+    final draft = ref.read(attemptDraftProvider);
+    if (draft == null) return;
+    final completedAt = DateTime.now().toUtc();
+    final DeviceContext device;
+    try {
+      device = await ref.read(deviceContextProvider.future);
+    } catch (_) {
+      return;
+    }
+    final previewSize = _cameraSource.controller?.value.previewSize;
+    final resolution = previewSize != null
+        ? '${previewSize.width.toInt()}x${previewSize.height.toInt()}'
+        : null;
+    await repo.persistAttempt(
+      draft: draft,
+      completedAt: completedAt,
+      passed: false,
+      failure: flow.reason,
+      failureMessage: flow.reason.thaiMessage,
+      faceScore: null,
+      faceScoreThreshold: AppConstants.faceDetectionMinScore,
+      captureValidation: null,
+      summaryPng: null,
+      device: device.copyWith(cameraResolution: resolution),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    ref.listen<LivenessFlowState>(flowControllerProvider, (prev, next) {
+      if (next is FlowFailed && prev is! FlowFailed && !_gatePersisted) {
+        // FlowCapturing → FlowFailed means CaptureFailed was dispatched from
+        // _capture(). ResultScreen handles persistence for that path.
+        // Only persist here for true gate-level failures (timeout, init error).
+        if (prev is! FlowCapturing) {
+          _gatePersisted = true;
+          unawaited(_persistGateFailure(next));
+        }
+      }
+    });
+
     final flow = ref.watch(flowControllerProvider);
     final camera = ref.watch(cameraSourceProvider);
 

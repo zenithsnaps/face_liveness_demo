@@ -2,6 +2,8 @@ import 'dart:math' as math;
 
 import '../../../../core/app_constants.dart';
 import '../../domain/entities/frame_data.dart';
+import '../../domain/entities/frame_metadata.dart';
+import '../../domain/entities/hand_snapshot.dart';
 import '../../domain/failures/liveness_failure.dart';
 import '../../domain/repositories/hand_analyzer.dart';
 import '../../infrastructure/mediapipe/mediapipe_face_detection_analyzer.dart';
@@ -16,7 +18,30 @@ class CaptureValidationResult {
   /// Non-null when validation failed.
   final LivenessFailure? failure;
 
-  const CaptureValidationResult({this.faceScore, this.failure});
+  /// All detected face scores (including those below threshold).
+  final List<double> faceScores;
+
+  /// Total number of faces detected by the face detector.
+  final int facesDetected;
+
+  /// Hands that exceeded the post-capture confidence threshold.
+  final List<HandSnapshot> hands;
+
+  /// Count of hands exceeding the post-capture confidence threshold.
+  final int handsDetected;
+
+  /// Metadata of the decoded JPEG frame (dimensions, rotation).
+  final FrameMetadata? frameMeta;
+
+  const CaptureValidationResult({
+    this.faceScore,
+    this.failure,
+    this.faceScores = const [],
+    this.facesDetected = 0,
+    this.hands = const [],
+    this.handsDetected = 0,
+    this.frameMeta,
+  });
 
   bool get passed => failure == null;
 }
@@ -43,6 +68,8 @@ class ValidateCapture {
         _handAnalyzer = handAnalyzer;
 
   Future<CaptureValidationResult> call(FrameData frame) async {
+    final meta = frame.metadata;
+
     // Kick off both detections before awaiting either.
     final faceFuture = _faceAnalyzer.analyze(frame);
     final handFuture = _handAnalyzer.analyze(frame);
@@ -51,12 +78,14 @@ class ValidateCapture {
 
     // --- Face ---
     if (faceResult.isErr) {
-      return const CaptureValidationResult(failure: LivenessFailure.analyzerError);
+      return CaptureValidationResult(
+        failure: LivenessFailure.analyzerError,
+        frameMeta: meta,
+      );
     }
     final faces = faceResult.okOrNull!;
-    final bestAny = faces.isEmpty
-        ? null
-        : faces.map((f) => f.score.value).reduce(math.max);
+    final allScores = faces.map((f) => f.score.value).toList();
+    final bestAny = faces.isEmpty ? null : allScores.reduce(math.max);
     final passing = faces
         .where((f) => f.score.value >= AppConstants.faceDetectionMinScore)
         .toList();
@@ -69,23 +98,43 @@ class ValidateCapture {
       return CaptureValidationResult(
         faceScore: bestPassing ?? bestAny,
         failure: LivenessFailure.analyzerError,
+        faceScores: allScores,
+        facesDetected: faces.length,
+        frameMeta: meta,
       );
     }
-    final hasHand = handResult.okOrNull!.any(
-      (h) => h.confidence.value >= AppConstants.postCaptureHandMinConfidence,
-    );
-    if (hasHand) {
+    final allHands = handResult.okOrNull!;
+    final confidentHands = allHands
+        .where((h) => h.confidence.value >= AppConstants.postCaptureHandMinConfidence)
+        .toList();
+    if (confidentHands.isNotEmpty) {
       return CaptureValidationResult(
         faceScore: bestPassing ?? bestAny,
         failure: LivenessFailure.handOccluding,
+        faceScores: allScores,
+        facesDetected: faces.length,
+        hands: confidentHands,
+        handsDetected: confidentHands.length,
+        frameMeta: meta,
       );
     }
 
     // --- No hand: check face threshold ---
     if (passing.isEmpty) {
-      return CaptureValidationResult(faceScore: bestAny, failure: LivenessFailure.noFace);
+      return CaptureValidationResult(
+        faceScore: bestAny,
+        failure: LivenessFailure.noFace,
+        faceScores: allScores,
+        facesDetected: faces.length,
+        frameMeta: meta,
+      );
     }
 
-    return CaptureValidationResult(faceScore: bestPassing);
+    return CaptureValidationResult(
+      faceScore: bestPassing,
+      faceScores: allScores,
+      facesDetected: faces.length,
+      frameMeta: meta,
+    );
   }
 }
