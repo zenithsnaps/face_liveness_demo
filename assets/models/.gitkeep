@@ -1,0 +1,2 @@
+Download MediaPipe model files into this folder (and into android/app/src/main/assets).
+See scripts/download_models.sh and README.md.
