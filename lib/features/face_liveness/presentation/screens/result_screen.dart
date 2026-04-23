@@ -3,22 +3,30 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../../core/app_constants.dart';
 import '../../../../core/app_strings.dart';
+import '../../application/usecases/post_capture_checks.dart';
+import '../../application/usecases/post_capture_thresholds.dart';
 import '../../application/usecases/validate_capture.dart';
 import '../../domain/failures/liveness_failure.dart';
 import '../../domain/repositories/liveness_result_repository.dart';
 import '../providers/liveness_providers.dart';
 import '../utils/widget_snapshot.dart';
+import 'analytics_screen.dart';
 
 class ResultScreen extends ConsumerStatefulWidget {
   final String photoPath;
   final CaptureValidationResult validation;
+  final PostCaptureThresholds thresholds;
+  final PostCaptureChecks checks;
+  final String? testCase;
 
   const ResultScreen({
     super.key,
     required this.photoPath,
     required this.validation,
+    required this.thresholds,
+    required this.checks,
+    required this.testCase,
   });
 
   @override
@@ -30,24 +38,16 @@ class _ResultScreenState extends ConsumerState<ResultScreen> {
   String? _remoteAttemptId;
   bool _persisting = false;
   bool _persistFailed = false;
-  bool _supabaseEnabled = false;
 
   @override
   void initState() {
     super.initState();
-    // Trigger after the first paint so Image.file is rendered into the boundary.
+    // Pre-cache the photo so it renders correctly when the RepaintBoundary
+    // snapshot is captured at upload time.
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      // Pre-cache photo so it appears in the snapshot
       try {
         await precacheImage(FileImage(File(widget.photoPath)), context);
-      } catch (_) {
-        // File might not exist in edge cases — proceed anyway
-      }
-      if (!mounted) return;
-      // Wait one more frame so the precached image is actually painted
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _captureAndPersist();
-      });
+      } catch (_) {}
     });
   }
 
@@ -56,8 +56,8 @@ class _ResultScreenState extends ConsumerState<ResultScreen> {
     if (repo == null) return;
 
     setState(() {
-      _supabaseEnabled = true;
       _persisting = true;
+      _persistFailed = false;
     });
 
     final png = await captureBoundaryPng(_summaryKey);
@@ -87,10 +87,12 @@ class _ResultScreenState extends ConsumerState<ResultScreen> {
       failure: widget.validation.failure,
       failureMessage: widget.validation.failure?.thaiMessage,
       faceScore: widget.validation.faceScore,
-      faceScoreThreshold: AppConstants.faceDetectionMinScore,
+      thresholds: widget.thresholds,
+      checks: widget.checks,
       captureValidation: widget.validation,
       summaryPng: png,
       device: device,
+      testCase: widget.testCase,
     );
 
     if (!mounted) return;
@@ -106,6 +108,9 @@ class _ResultScreenState extends ConsumerState<ResultScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final repo = ref.read(livenessResultRepositoryProvider);
+    final supabaseEnabled = repo != null;
+
     return Scaffold(
       appBar: AppBar(
         title: Text(
@@ -152,9 +157,23 @@ class _ResultScreenState extends ConsumerState<ResultScreen> {
             ),
             const SizedBox(height: 12),
 
-            // Cloud sync banner (outside RepaintBoundary — not part of snapshot)
-            if (_supabaseEnabled) _buildSyncBanner(),
-            if (_supabaseEnabled) const SizedBox(height: 12),
+            // Cloud sync section (outside RepaintBoundary — not part of snapshot)
+            if (supabaseEnabled) ...[
+              _buildSyncBanner(),
+              const SizedBox(height: 8),
+              _buildUploadButton(),
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                icon: const Icon(Icons.analytics_outlined),
+                label: const Text('ดูสรุปภาพรวม'),
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const AnalyticsScreen(),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 4),
+            ],
 
             const Text(
               AppStrings.photoPathLabel,
@@ -171,6 +190,37 @@ class _ResultScreenState extends ConsumerState<ResultScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildUploadButton() {
+    // Hide once uploaded successfully.
+    if (_remoteAttemptId != null) return const SizedBox.shrink();
+
+    if (_persisting) {
+      return FilledButton.icon(
+        onPressed: null,
+        icon: const SizedBox(
+          width: 16,
+          height: 16,
+          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+        ),
+        label: const Text(AppStrings.cloudSaving),
+      );
+    }
+
+    if (_persistFailed) {
+      return OutlinedButton.icon(
+        onPressed: _captureAndPersist,
+        icon: const Icon(Icons.cloud_upload_outlined),
+        label: const Text(AppStrings.cloudRetry),
+      );
+    }
+
+    return FilledButton.icon(
+      onPressed: _captureAndPersist,
+      icon: const Icon(Icons.cloud_upload),
+      label: const Text(AppStrings.cloudUpload),
     );
   }
 

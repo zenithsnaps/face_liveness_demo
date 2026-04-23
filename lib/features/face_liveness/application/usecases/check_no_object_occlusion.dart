@@ -17,6 +17,7 @@ class CheckNoObjectOcclusion {
   Result<void, LivenessFailure> call({
     required FaceSnapshot face,
     required List<ObjectSnapshot> objects,
+    double? landmarkVisibilityThreshold,
   }) {
     // Signal 1 — detected object overlapping the face.
     // Exclude low-confidence detections and labels that are never real occlusions.
@@ -44,7 +45,9 @@ class CheckNoObjectOcclusion {
       ];
       for (final key in critical) {
         final v = visibility[key];
-        if (v != null && v.value < AppConstants.landmarkVisibilityThreshold) {
+        final visThreshold =
+            landmarkVisibilityThreshold ?? AppConstants.landmarkVisibilityThreshold;
+        if (v != null && v.value < visThreshold) {
           return const Err(LivenessFailure.objectOccluding);
         }
       }

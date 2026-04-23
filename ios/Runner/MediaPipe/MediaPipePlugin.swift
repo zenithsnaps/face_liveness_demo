@@ -2,19 +2,21 @@ import Flutter
 import Foundation
 
 /// Single MethodChannel handler bridging Flutter to MediaPipe Tasks Vision
-/// (HandLandmarker + ObjectDetector + FaceDetector). Mirrors `MediaPipePlugin.kt` on Android.
+/// (HandLandmarker + ObjectDetector + FaceDetector + FaceLandmarker). Mirrors `MediaPipePlugin.kt` on Android.
 ///
 /// Method names (must match `MediaPipeChannel` on the Dart side):
 ///   - "initialize"
 ///   - "detectHands"
 ///   - "detectObjects"
 ///   - "detectFaces"
+///   - "detectFaceLandmarks"
 ///   - "dispose"
 enum MediaPipePlugin {
     private static let channelName = "app.mymo/mediapipe"
     private static var handBridge: HandAnalyzerBridge?
     private static var objectBridge: ObjectAnalyzerBridge?
     private static var faceBridge: FaceDetectorBridge?
+    private static var faceLandmarkerBridge: FaceLandmarkerBridge?
     private static let workQueue = DispatchQueue(label: "app.mymo.mediapipe", qos: .userInitiated)
 
     static func register(with messenger: FlutterBinaryMessenger) {
@@ -33,6 +35,7 @@ enum MediaPipePlugin {
                 if handBridge == nil { handBridge = try HandAnalyzerBridge() }
                 if objectBridge == nil { objectBridge = try ObjectAnalyzerBridge() }
                 if faceBridge == nil { faceBridge = try FaceDetectorBridge() }
+                if faceLandmarkerBridge == nil { faceLandmarkerBridge = try FaceLandmarkerBridge() }
                 DispatchQueue.main.async { result(nil) }
             case "detectHands":
                 guard let frame = FrameArgs.fromAny(call.arguments) else {
@@ -64,10 +67,21 @@ enum MediaPipePlugin {
                 if faceBridge == nil { faceBridge = try FaceDetectorBridge() }
                 let faces = try faceBridge!.detect(frame: frame)
                 DispatchQueue.main.async { result(faces) }
+            case "detectFaceLandmarks":
+                guard let frame = FrameArgs.fromAny(call.arguments) else {
+                    DispatchQueue.main.async {
+                        result(FlutterError(code: "BAD_ARGS", message: "expected Map", details: nil))
+                    }
+                    return
+                }
+                if faceLandmarkerBridge == nil { faceLandmarkerBridge = try FaceLandmarkerBridge() }
+                let landmarkResult = try faceLandmarkerBridge!.detect(frame: frame)
+                DispatchQueue.main.async { result(landmarkResult) }
             case "dispose":
                 handBridge = nil
                 objectBridge = nil
                 faceBridge = nil
+                faceLandmarkerBridge = nil
                 DispatchQueue.main.async { result(nil) }
             default:
                 DispatchQueue.main.async { result(FlutterMethodNotImplemented) }

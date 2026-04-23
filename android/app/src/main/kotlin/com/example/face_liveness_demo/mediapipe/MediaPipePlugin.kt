@@ -11,13 +11,14 @@ import java.util.concurrent.Executors
 
 /**
  * Single MethodChannel handler that bridges Flutter to MediaPipe Tasks
- * (Hand Landmarker + Object Detector + Face Detector).
+ * (Hand Landmarker + Object Detector + Face Detector + Face Landmarker).
  *
  * Method names (must match infrastructure/platform_channels/mediapipe_channel.dart):
  *   - "initialize"
  *   - "detectHands"
  *   - "detectObjects"
  *   - "detectFaces"
+ *   - "detectFaceLandmarks"
  *   - "dispose"
  */
 object MediaPipePlugin {
@@ -27,6 +28,7 @@ object MediaPipePlugin {
     private var handBridge: HandAnalyzerBridge? = null
     private var objectBridge: ObjectAnalyzerBridge? = null
     private var faceBridge: FaceDetectorBridge? = null
+    private var faceLandmarkerBridge: FaceLandmarkerBridge? = null
     private var executor: ExecutorService? = null
 
     fun register(context: Context, binaryMessenger: BinaryMessenger) {
@@ -49,6 +51,7 @@ object MediaPipePlugin {
                         if (handBridge == null) handBridge = HandAnalyzerBridge(context)
                         if (objectBridge == null) objectBridge = ObjectAnalyzerBridge(context)
                         if (faceBridge == null) faceBridge = FaceDetectorBridge(context)
+                        if (faceLandmarkerBridge == null) faceLandmarkerBridge = FaceLandmarkerBridge(context)
                         postResult(result, null)
                     }
                     "detectHands" -> {
@@ -75,13 +78,23 @@ object MediaPipePlugin {
                         val faces = bridge.detect(frame)
                         postResult(result, faces)
                     }
+                    "detectFaceLandmarks" -> {
+                        val bridge = faceLandmarkerBridge ?: FaceLandmarkerBridge(context).also { faceLandmarkerBridge = it }
+                        val args = call.arguments as? Map<*, *>
+                            ?: return@execute postError(result, "BAD_ARGS", "expected Map")
+                        val frame = FrameArgs.fromMap(args)
+                        val landmarkResult = bridge.detect(frame)
+                        postResult(result, landmarkResult)
+                    }
                     "dispose" -> {
                         handBridge?.close()
                         objectBridge?.close()
                         faceBridge?.close()
+                        faceLandmarkerBridge?.close()
                         handBridge = null
                         objectBridge = null
                         faceBridge = null
+                        faceLandmarkerBridge = null
                         postResult(result, null)
                     }
                     else -> postNotImplemented(result)

@@ -89,7 +89,7 @@ final class FlowCapturing extends LivenessFlowState {
 @immutable
 final class FlowDone extends LivenessFlowState {
   final String photoPath;
-  final double faceScore;
+  final double? faceScore;
   const FlowDone(this.photoPath, {required this.faceScore});
 
   @override

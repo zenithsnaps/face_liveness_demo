@@ -223,13 +223,20 @@ Logic ที่เขียนไว้รอ wire:
 
 ```
 1. decode JPEG → RGBA bytes
-2. MediaPipeFaceDetectionAnalyzer.analyze()
+2. MediaPipeFaceDetectionAnalyzer.analyze()     [concurrent]
    → ต้องพบ face ≥ 1 ตัวที่ confidence ≥ 95%
-3. MediaPipeHandAnalyzer.analyze()
+3. MediaPipeHandAnalyzer.analyze()              [concurrent]
    → ต้องไม่พบมือ (confidence ≥ 0.5)
-4. ถ้าผ่านทั้งคู่ → CaptureComplete(path) → FlowDone
-5. ถ้าไม่ผ่าน → CaptureFailed → FlowFailed
+4. MediaPipeFaceLandmarkerAnalyzer.analyze()   [หลังผ่าน 2+3]
+   → ดึง visibility score ของ landmark 4 จุด:
+     noseBase (index 1), mouthLeft (61), mouthRight (291), mouthBottom (17)
+5. CheckNoObjectOcclusion() — ตรวจ visibility drop ของ landmark รอบปาก/จมูก
+   → ถ้า visibility < 0.7 บนจุดใดจุดหนึ่ง → LivenessFailure.objectOccluding
+6. ถ้าผ่านทั้งหมด → CaptureComplete(path) → FlowDone
+7. ถ้าไม่ผ่าน → CaptureFailed → FlowFailed
 ```
+
+> real-time loop ยังคงเดิม — FaceLandmarker รันเฉพาะขั้น post-capture
 
 ---
 
@@ -304,6 +311,7 @@ FlowDone(photoPath) → ResultScreen
 | ML Kit Face Detection | Real-time stream | Google ML Kit | ทุกเฟรม |
 | blaze_face_short_range.tflite | Post-capture validate | MediaPipe TFLite | ครั้งเดียว (หลังถ่ายรูป) |
 | hand_landmarker.task | Post-capture validate | MediaPipe Tasks | ครั้งเดียว (หลังถ่ายรูป) |
+| face_landmarker.task | Post-capture validate | MediaPipe Tasks | ครั้งเดียว (หลังถ่ายรูป) |
 | efficientdet_lite0.tflite | (ยังไม่ได้ใช้งาน) | MediaPipe TFLite | — |
 
 ### Platform Channel Bridge
@@ -453,6 +461,10 @@ static const double eyeOpenThreshold   = 0.7;
 static const double handBboxExpandRatio     = 0.15;
 static const double objectOverlapThreshold  = 0.10;
 static const double minLandmarkVisibility   = 0.70;
+
+// Face landmarker (post-capture)
+static const String faceLandmarkerModelAsset             = 'assets/models/face_landmarker.task';
+static const double faceLandmarkerMinDetectionConfidence = 0.5;
 
 // Flow
 static const int   debounceFrames = 5;

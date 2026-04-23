@@ -31,6 +31,28 @@ class FaceSnapshot {
     this.landmarks = const {},
     this.landmarkVisibility = const {},
   });
+
+  FaceSnapshot copyWith({
+    Rect2D? boundingBox,
+    EulerAngles? headPose,
+    Confidence? smilingProbability,
+    Confidence? leftEyeOpenProbability,
+    Confidence? rightEyeOpenProbability,
+    Map<FaceLandmarkType, Point2D>? landmarks,
+    Map<FaceLandmarkType, Confidence>? landmarkVisibility,
+  }) {
+    return FaceSnapshot(
+      boundingBox: boundingBox ?? this.boundingBox,
+      headPose: headPose ?? this.headPose,
+      smilingProbability: smilingProbability ?? this.smilingProbability,
+      leftEyeOpenProbability:
+          leftEyeOpenProbability ?? this.leftEyeOpenProbability,
+      rightEyeOpenProbability:
+          rightEyeOpenProbability ?? this.rightEyeOpenProbability,
+      landmarks: landmarks ?? this.landmarks,
+      landmarkVisibility: landmarkVisibility ?? this.landmarkVisibility,
+    );
+  }
 }
 
 enum FaceLandmarkType {

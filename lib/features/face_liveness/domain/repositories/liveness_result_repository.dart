@@ -2,8 +2,11 @@ import 'dart:typed_data';
 
 import 'package:meta/meta.dart';
 
+import '../../application/usecases/post_capture_checks.dart';
+import '../../application/usecases/post_capture_thresholds.dart';
 import '../../application/usecases/validate_capture.dart';
 import '../../domain/entities/attempt_draft.dart';
+import '../../domain/entities/attempt_record.dart';
 import '../../domain/failures/liveness_failure.dart';
 
 @immutable
@@ -38,9 +41,18 @@ abstract class LivenessResultRepository {
     required LivenessFailure? failure,
     required String? failureMessage,
     required double? faceScore,
-    required double faceScoreThreshold,
+    required PostCaptureThresholds thresholds,
+    required PostCaptureChecks checks,
     required CaptureValidationResult? captureValidation,
     required Uint8List? summaryPng,
     required DeviceContext device,
+    required String? testCase,
+  });
+
+  /// Fetch the most recent [limit] attempts, optionally filtered to rows
+  /// completed on or after [since]. Rows are returned newest-first.
+  Future<List<AttemptRecord>> fetchAttempts({
+    DateTime? since,
+    int limit = 1000,
   });
 }

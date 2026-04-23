@@ -46,4 +46,8 @@ class AppConstants {
 
   // Max simultaneously detected hands
   static const int maxHands = 2;
+
+  // Face landmarker (post-capture occlusion check)
+  static const String faceLandmarkerModelAsset = 'assets/models/face_landmarker.task';
+  static const double faceLandmarkerMinDetectionConfidence = 0.5;
 }

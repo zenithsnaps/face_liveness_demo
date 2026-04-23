@@ -21,6 +21,8 @@
 		8BA5AB052F978F3A00511ED2 /* efficientdet_lite0.tflite in Resources */ = {isa = PBXBuildFile; fileRef = 8BA5AB022F978F3A00511ED2 /* efficientdet_lite0.tflite */; };
 		8BA5AB062F97903500511ED2 /* blaze_face_short_range.tflite in Resources */ = {isa = PBXBuildFile; fileRef = 8BA5AB052F97903500511ED2 /* blaze_face_short_range.tflite */; };
 		8BA5AB072F97903500511ED2 /* FaceDetectorBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BA5AB082F97903500511ED2 /* FaceDetectorBridge.swift */; };
+		8BA5AB0A2F97903500511ED2 /* FaceLandmarkerBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BA5AB092F97903500511ED2 /* FaceLandmarkerBridge.swift */; };
+		8BA5AB072F9932CF00511ED2 /* face_landmarker.task in Resources */ = {isa = PBXBuildFile; fileRef = 8BA5AB062F9932CF00511ED2 /* face_landmarker.task */; };
 		97C146FC1CF9000F007C117D /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FA1CF9000F007C117D /* Main.storyboard */; };
 		97C146FE1CF9000F007C117D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FD1CF9000F007C117D /* Assets.xcassets */; };
 		97C147011CF9000F007C117D /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FF1CF9000F007C117D /* LaunchScreen.storyboard */; };
@@ -70,7 +72,9 @@
 		8BA5AB022F978F3A00511ED2 /* efficientdet_lite0.tflite */ = {isa = PBXFileReference; lastKnownFileType = file; path = efficientdet_lite0.tflite; sourceTree = "<group>"; };
 		8BA5AB032F978F3A00511ED2 /* hand_landmarker.task */ = {isa = PBXFileReference; lastKnownFileType = file; path = hand_landmarker.task; sourceTree = "<group>"; };
 		8BA5AB052F97903500511ED2 /* blaze_face_short_range.tflite */ = {isa = PBXFileReference; lastKnownFileType = file; path = blaze_face_short_range.tflite; sourceTree = "<group>"; };
+		8BA5AB062F9932CF00511ED2 /* face_landmarker.task */ = {isa = PBXFileReference; lastKnownFileType = file; path = face_landmarker.task; sourceTree = "<group>"; };
 		8BA5AB082F97903500511ED2 /* FaceDetectorBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FaceDetectorBridge.swift; sourceTree = "<group>"; };
+		8BA5AB092F97903500511ED2 /* FaceLandmarkerBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FaceLandmarkerBridge.swift; sourceTree = "<group>"; };
 		9740EEB21CF90195004384FC /* Debug.xcconfig */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xcconfig; name = Debug.xcconfig; path = Flutter/Debug.xcconfig; sourceTree = "<group>"; };
 		9740EEB31CF90195004384FC /* Generated.xcconfig */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xcconfig; name = Generated.xcconfig; path = Flutter/Generated.xcconfig; sourceTree = "<group>"; };
 		97C146EE1CF9000F007C117D /* Runner.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Runner.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -125,6 +129,7 @@
 			children = (
 				8BA5AAF92F978EF200511ED2 /* FrameDecoder.swift */,
 				8BA5AB082F97903500511ED2 /* FaceDetectorBridge.swift */,
+				8BA5AB092F97903500511ED2 /* FaceLandmarkerBridge.swift */,
 				8BA5AAFA2F978EF200511ED2 /* HandAnalyzerBridge.swift */,
 				8BA5AAFB2F978EF200511ED2 /* MediaPipePlugin.swift */,
 				8BA5AAFC2F978EF200511ED2 /* ObjectAnalyzerBridge.swift */,
@@ -167,6 +172,7 @@
 		97C146F01CF9000F007C117D /* Runner */ = {
 			isa = PBXGroup;
 			children = (
+				8BA5AB062F9932CF00511ED2 /* face_landmarker.task */,
 				8BA5AB022F978F3A00511ED2 /* efficientdet_lite0.tflite */,
 				8BA5AB032F978F3A00511ED2 /* hand_landmarker.task */,
 				8BA5AB052F97903500511ED2 /* blaze_face_short_range.tflite */,
@@ -296,6 +302,7 @@
 				3B3967161E833CAA004F5970 /* AppFrameworkInfo.plist in Resources */,
 				8BA5AB042F978F3A00511ED2 /* hand_landmarker.task in Resources */,
 				8BA5AB052F978F3A00511ED2 /* efficientdet_lite0.tflite in Resources */,
+				8BA5AB072F9932CF00511ED2 /* face_landmarker.task in Resources */,
 				8BA5AB062F97903500511ED2 /* blaze_face_short_range.tflite in Resources */,
 				97C146FE1CF9000F007C117D /* Assets.xcassets in Resources */,
 				97C146FC1CF9000F007C117D /* Main.storyboard in Resources */,
@@ -435,6 +442,7 @@
 				8BA5AB002F978EF200511ED2 /* HandAnalyzerBridge.swift in Sources */,
 				8BA5AB012F978EF200511ED2 /* FrameDecoder.swift in Sources */,
 				8BA5AB072F97903500511ED2 /* FaceDetectorBridge.swift in Sources */,
+				8BA5AB0A2F97903500511ED2 /* FaceLandmarkerBridge.swift in Sources */,
 				1498D2341E8E89220040F4C2 /* GeneratedPluginRegistrant.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

@@ -45,7 +45,7 @@ final class UserRetry extends LivenessFlowEvent {
 @immutable
 final class CaptureComplete extends LivenessFlowEvent {
   final String photoPath;
-  final double faceScore;
+  final double? faceScore;
   const CaptureComplete(this.photoPath, {required this.faceScore});
 }
 

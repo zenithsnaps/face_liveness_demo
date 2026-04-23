@@ -11,6 +11,7 @@ import '../../domain/entities/frame_metadata.dart';
 ///   - `detectHands(frame)` → `List<Map>`
 ///   - `detectObjects(frame)` → `List<Map>`
 ///   - `detectFaces(frame)` → `List<Map>` — [{confidence, bbox}] per face
+///   - `detectFaceLandmarks(frame)` → `Map` — {found, landmarks: [[x,y,z,vis,pres]×478]}
 ///   - `dispose`
 ///
 /// Frame is serialized as:
@@ -54,6 +55,16 @@ class MediaPipeChannel {
       _encodeFrame(frame),
     );
     return _decodeMapList(raw);
+  }
+
+  /// Returns `{found: bool, landmarks: [[x,y,z,visibility,presence]×478]}`.
+  /// `found: false` when the model detected no face in the frame.
+  Future<Map<String, Object?>> detectFaceLandmarks(FrameData frame) async {
+    final raw = await _channel.invokeMapMethod<String, Object?>(
+      'detectFaceLandmarks',
+      _encodeFrame(frame),
+    );
+    return raw ?? const {};
   }
 
   Future<void> dispose() async {

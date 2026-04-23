@@ -27,7 +27,7 @@ class AppStrings {
 
   // Result
   static const String verificationSuccess = 'ยืนยันตัวตนสำเร็จ';
-  static const String noFaceDetected = 'ไม่พบใบหน้า';
+  static const String noFaceDetected = 'มีวัตถุบังบนใบหน้า';
   static const String multipleFaces = 'พบใบหน้าหลายคน กรุณาถ่ายคนเดียว';
 
   // Flow
@@ -47,6 +47,8 @@ class AppStrings {
   static const String stepOcclusion = 'ตรวจการบัง';
 
   // Cloud sync status (shown on ResultScreen)
+  static const String cloudUpload = 'อัพโหลดขึ้น cloud';
+  static const String cloudRetry = 'ลองอัพโหลดอีกครั้ง';
   static const String cloudSaving = 'กำลังบันทึกขึ้น cloud...';
   static const String cloudSaved = 'บันทึกขึ้น cloud แล้ว';
   static const String cloudSyncFailed = 'บันทึกขึ้น cloud ไม่สำเร็จ';

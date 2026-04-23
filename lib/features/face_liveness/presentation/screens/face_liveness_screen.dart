@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
@@ -13,13 +14,17 @@ import '../../domain/entities/face_snapshot.dart';
 import '../../domain/entities/frame_data.dart';
 import '../../domain/entities/liveness_gate.dart';
 import '../../domain/failures/liveness_failure.dart';
-import '../../domain/repositories/liveness_result_repository.dart';
 import '../../domain/value_objects/rect2d.dart';
 import '../../infrastructure/camera/camera_frame_source.dart';
 import '../../infrastructure/image/jpeg_frame_decoder.dart';
 import '../../infrastructure/mlkit/mlkit_face_analyzer.dart';
+import '../providers/face_score_samples_provider.dart';
 import '../providers/liveness_providers.dart';
+import '../providers/post_capture_checks_provider.dart';
+import '../providers/post_capture_thresholds_provider.dart';
+import '../providers/test_cases_provider.dart';
 import '../widgets/face_oval_overlay.dart';
+import '../widgets/face_score_chart.dart';
 import '../widgets/instruction_banner.dart';
 import '../widgets/step_indicator.dart';
 import 'result_screen.dart';
@@ -35,7 +40,6 @@ class _FaceLivenessScreenState extends ConsumerState<FaceLivenessScreen>
     with WidgetsBindingObserver {
   bool _processing = false;
   bool _initialized = false;
-  bool _gatePersisted = false;
   Timer? _gateTimeout;
   late final CameraFrameSource _cameraSource;
 
@@ -73,10 +77,10 @@ class _FaceLivenessScreenState extends ConsumerState<FaceLivenessScreen>
   }
 
   Future<void> _bootstrap() async {
-    _gatePersisted = false;
     final controller = ref.read(flowControllerProvider.notifier);
     controller.dispatch(const StartRequested());
     ref.read(attemptDraftProvider.notifier).startNew();
+    ref.read(faceScoreSamplesProvider.notifier).clear();
     final camera = ref.read(cameraSourceProvider);
     try {
       // Initialize camera + MediaPipe (face detector + hand landmarker loaded).
@@ -121,12 +125,26 @@ class _FaceLivenessScreenState extends ConsumerState<FaceLivenessScreen>
       faceAnalyzer.setPendingInputImage(inputImage);
     }
 
-    FaceSnapshot? face;
+    // Run ML Kit (gates) and MediaPipe face detection (live score chart) in parallel.
+    final mediapipeFaceAnalyzer = ref.read(faceDetectionAnalyzerProvider);
+    final faceFuture = faceAnalyzer.analyze(frame);
+    final mediapipeFaceFuture = mediapipeFaceAnalyzer.analyze(frame);
 
-    final faceResult = await faceAnalyzer.analyze(frame);
+    FaceSnapshot? face;
+    final faceResult = await faceFuture;
     faceResult.fold((value) => face = value, (_) {});
 
+    final mediapipeFaceResult = await mediapipeFaceFuture;
+    double? bestMediapipeScore;
+    mediapipeFaceResult.fold((faces) {
+      if (faces.isNotEmpty) {
+        bestMediapipeScore =
+            faces.map((f) => f.score.value).reduce(math.max);
+      }
+    }, (_) {});
+
     if (!mounted) return;
+    ref.read(faceScoreSamplesProvider.notifier).add(bestMediapipeScore);
 
     final ovalGuide = _ovalGuideInFrameSpace(
         image.width, image.height, frame.metadata.rotationDegrees);
@@ -201,68 +219,42 @@ class _FaceLivenessScreenState extends ConsumerState<FaceLivenessScreen>
     }
     if (!mounted) return;
 
-    final result = await ref.read(validateCaptureProvider).call(frame);
+    final thresholds = ref.read(postCaptureThresholdsProvider);
+    final checks = ref.read(postCaptureChecksProvider);
+    final testCase = ref.read(selectedTestCaseProvider);
+    final result = await ref.read(validateCaptureProvider).call(
+          frame,
+          thresholds: thresholds,
+          checks: checks,
+        );
     if (!mounted) return;
 
     if (result.passed) {
-      controller.dispatch(CaptureComplete(path, faceScore: result.faceScore!));
+      controller.dispatch(CaptureComplete(path, faceScore: result.faceScore));
     } else {
       controller.dispatch(CaptureFailed(result.failure!));
     }
     if (!mounted) return;
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(
-        builder: (_) => ResultScreen(photoPath: path, validation: result),
+        builder: (_) => ResultScreen(
+          photoPath: path,
+          validation: result,
+          thresholds: thresholds,
+          checks: checks,
+          testCase: testCase,
+        ),
       ),
-    );
-  }
-
-  Future<void> _persistGateFailure(FlowFailed flow) async {
-    final repo = ref.read(livenessResultRepositoryProvider);
-    if (repo == null) return;
-    final draft = ref.read(attemptDraftProvider);
-    if (draft == null) return;
-    final completedAt = DateTime.now().toUtc();
-    final DeviceContext device;
-    try {
-      device = await ref.read(deviceContextProvider.future);
-    } catch (_) {
-      return;
-    }
-    final previewSize = _cameraSource.controller?.value.previewSize;
-    final resolution = previewSize != null
-        ? '${previewSize.width.toInt()}x${previewSize.height.toInt()}'
-        : null;
-    await repo.persistAttempt(
-      draft: draft,
-      completedAt: completedAt,
-      passed: false,
-      failure: flow.reason,
-      failureMessage: flow.reason.thaiMessage,
-      faceScore: null,
-      faceScoreThreshold: AppConstants.faceDetectionMinScore,
-      captureValidation: null,
-      summaryPng: null,
-      device: device.copyWith(cameraResolution: resolution),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    ref.listen<LivenessFlowState>(flowControllerProvider, (prev, next) {
-      if (next is FlowFailed && prev is! FlowFailed && !_gatePersisted) {
-        // FlowCapturing → FlowFailed means CaptureFailed was dispatched from
-        // _capture(). ResultScreen handles persistence for that path.
-        // Only persist here for true gate-level failures (timeout, init error).
-        if (prev is! FlowCapturing) {
-          _gatePersisted = true;
-          unawaited(_persistGateFailure(next));
-        }
-      }
-    });
-
     final flow = ref.watch(flowControllerProvider);
     final camera = ref.watch(cameraSourceProvider);
+    final faceScoreSamples = ref.watch(faceScoreSamplesProvider);
+    final thresholds = ref.watch(postCaptureThresholdsProvider);
+    final showChart = _initialized && flow is! FlowFailed;
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -299,6 +291,16 @@ class _FaceLivenessScreenState extends ConsumerState<FaceLivenessScreen>
                 status: _ovalStatus(flow),
               ),
             ),
+            if (showChart)
+              Positioned(
+                bottom: 80,
+                left: 16,
+                right: 16,
+                child: FaceScoreChart(
+                  samples: faceScoreSamples,
+                  threshold: thresholds.faceScore,
+                ),
+              ),
             Positioned(
               bottom: 32,
               left: 24,

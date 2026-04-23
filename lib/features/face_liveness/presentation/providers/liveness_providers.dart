@@ -20,6 +20,7 @@ import '../../domain/repositories/object_analyzer.dart';
 import '../../infrastructure/camera/camera_frame_source.dart';
 import '../../infrastructure/camera/input_image_converter.dart';
 import '../../infrastructure/mediapipe/mediapipe_face_detection_analyzer.dart';
+import '../../infrastructure/mediapipe/mediapipe_face_landmarker_analyzer.dart';
 import '../../infrastructure/mediapipe/mediapipe_hand_analyzer.dart';
 import '../../infrastructure/mediapipe/mediapipe_object_analyzer.dart';
 import '../../infrastructure/mlkit/mlkit_face_analyzer.dart';
@@ -66,10 +67,15 @@ final faceDetectionAnalyzerProvider = Provider<MediaPipeFaceDetectionAnalyzer>((
   return MediaPipeFaceDetectionAnalyzer(ref.read(mediaPipeChannelProvider));
 });
 
+final faceLandmarkerAnalyzerProvider = Provider<MediaPipeFaceLandmarkerAnalyzer>((ref) {
+  return MediaPipeFaceLandmarkerAnalyzer(ref.read(mediaPipeChannelProvider));
+});
+
 final validateCaptureProvider = Provider<ValidateCapture>((ref) {
   return ValidateCapture(
     faceAnalyzer: ref.read(faceDetectionAnalyzerProvider),
     handAnalyzer: ref.read(handAnalyzerProvider),
+    faceLandmarkerAnalyzer: ref.read(faceLandmarkerAnalyzerProvider),
   );
 });
 
