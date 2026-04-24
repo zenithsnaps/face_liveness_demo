@@ -31,10 +31,16 @@ class AppConstants {
   static const double faceDetectionMinScore = 0.50;
   static const double postCaptureHandMinConfidence = 0.10;
 
-  // Eye-occlusion pixel-analysis thresholds (post-capture)
-  static const double eyeMaxLuminanceDefault = 60.0;          // 0–255; below = dark eye region
-  static const double eyeMaxSaturationDefault = 0.25;          // 0–1; below = grey/flat lens
-  static const double eyeMinContrastVsReferenceDefault = 70.0; // 0–255; eye must be this much darker than cheek
+  // Eye-occlusion detection thresholds (post-capture, Combined Score model)
+  // Each signal is scored 0 (pass) → 1 (block) with linear interpolation in the
+  // suspicious range; combined = mean of three scores; block when ≥ 0.5.
+  static const double eyeLumRatioPass = 0.55;     // eyeLum/cheekLum above this → score 0
+  static const double eyeLumRatioBlock = 0.35;    // below this → score 1
+  static const double eyeStdDevPass = 15.0;       // luminance std-dev above this → score 0
+  static const double eyeStdDevBlock = 8.0;       // below this → score 1
+  static const double eyeSaturationPass = 20.0;   // mean(max−min) per pixel above this → score 0
+  static const double eyeSaturationBlock = 12.0;  // below this → score 1
+  static const double eyeOcclusionBlockScore = 0.5; // combined ≥ this → fail
 
   // Flow machine
   static const int debounceFrames = 5;

@@ -300,18 +300,20 @@ class _EyeEvidenceChip extends StatelessWidget {
     final flagColor =
         evidence.occluded ? Colors.red.shade700 : Colors.grey.shade600;
 
-    String fmt(double v) => v.toStringAsFixed(1);
-    String fmtS(double v) => v.toStringAsFixed(2);
+    String fmt1(double v) => v.toStringAsFixed(1);
+    String fmt2(double v) => v.toStringAsFixed(2);
 
     final rows = [
-      ('ดวงตาซ้าย  Lum / Sat',
-          '${fmt(evidence.leftEyeLuminance)} / ${fmtS(evidence.leftEyeSaturation)}'),
-      ('ดวงตาขวา  Lum / Sat',
-          '${fmt(evidence.rightEyeLuminance)} / ${fmtS(evidence.rightEyeSaturation)}'),
-      ('แก้ม (ref)  Lum',
-          fmt(evidence.referenceLuminance)),
-      ('Contrast  ซ้าย / ขวา',
-          '${fmt(evidence.leftContrast)} / ${fmt(evidence.rightContrast)}'),
+      ('แก้ม ref Lum', fmt1(evidence.referenceLuminance)),
+      ('Lum ratio  ซ้าย / ขวา',
+          '${fmt2(evidence.leftLumRatio)} / ${fmt2(evidence.rightLumRatio)}'),
+      ('StdDev  ซ้าย / ขวา',
+          '${fmt1(evidence.leftStdDev)} / ${fmt1(evidence.rightStdDev)}'),
+      ('Saturation  ซ้าย / ขวา',
+          '${fmt1(evidence.leftSaturation)} / ${fmt1(evidence.rightSaturation)}'),
+      ('Score  ซ้าย / ขวา',
+          '${fmt2(evidence.leftScore)} / ${fmt2(evidence.rightScore)}'),
+      ('Combined score', fmt2(evidence.combinedScore)),
     ];
 
     return Container(
