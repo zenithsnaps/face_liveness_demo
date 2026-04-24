@@ -13,6 +13,7 @@ class AppConstants {
   static const double faceBboxMinRatio = 0.80; // below → "ขยับเข้าใกล้กล้อง"
   static const double faceBboxTargetRatio = 0.90; // minimum to pass
   static const double faceBboxMaxRatio = 0.98; // above → "ขยับออกเล็กน้อย"
+  static const double faceQualityEyeOpenMinThreshold = 0.7;
 
   // Gate 3 — object occlusion
   static const double landmarkVisibilityThreshold = 0.7;
@@ -29,6 +30,11 @@ class AppConstants {
   // Post-capture validation thresholds
   static const double faceDetectionMinScore = 0.50;
   static const double postCaptureHandMinConfidence = 0.10;
+
+  // Eye-occlusion pixel-analysis thresholds (post-capture)
+  static const double eyeMaxLuminanceDefault = 60.0;          // 0–255; below = dark eye region
+  static const double eyeMaxSaturationDefault = 0.25;          // 0–1; below = grey/flat lens
+  static const double eyeMinContrastVsReferenceDefault = 70.0; // 0–255; eye must be this much darker than cheek
 
   // Flow machine
   static const int debounceFrames = 5;

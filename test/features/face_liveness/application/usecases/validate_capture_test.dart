@@ -1,12 +1,15 @@
 import 'package:face_liveness_demo/core/result.dart';
+import 'package:face_liveness_demo/features/face_liveness/application/usecases/check_no_eye_occlusion.dart';
 import 'package:face_liveness_demo/features/face_liveness/application/usecases/post_capture_checks.dart';
 import 'package:face_liveness_demo/features/face_liveness/application/usecases/post_capture_thresholds.dart';
 import 'package:face_liveness_demo/features/face_liveness/application/usecases/validate_capture.dart';
+import 'package:face_liveness_demo/features/face_liveness/domain/entities/eye_regions.dart';
 import 'package:face_liveness_demo/features/face_liveness/domain/entities/face_detection.dart';
 import 'package:face_liveness_demo/features/face_liveness/domain/entities/face_snapshot.dart';
 import 'package:face_liveness_demo/features/face_liveness/domain/entities/frame_data.dart';
 import 'package:face_liveness_demo/features/face_liveness/domain/entities/frame_metadata.dart';
 import 'package:face_liveness_demo/features/face_liveness/domain/failures/liveness_failure.dart';
+import 'package:face_liveness_demo/features/face_liveness/domain/repositories/eye_contour_analyzer.dart';
 import 'package:face_liveness_demo/features/face_liveness/domain/value_objects/confidence.dart';
 import 'package:face_liveness_demo/features/face_liveness/domain/value_objects/rect2d.dart';
 import 'package:face_liveness_demo/features/face_liveness/infrastructure/mediapipe/mediapipe_face_detection_analyzer.dart';
@@ -28,6 +31,17 @@ class FakeMediaPipeFaceDetectionAnalyzer extends MediaPipeFaceDetectionAnalyzer 
     FrameData frame,
   ) async =>
       nextResult;
+}
+
+class FakeEyeContourAnalyzer implements EyeContourAnalyzer {
+  Result<EyeRegions?, AnalyzerError> nextResult = const Ok(null);
+
+  @override
+  Future<Result<EyeRegions?, AnalyzerError>> analyze(FrameData frame) async =>
+      nextResult;
+
+  @override
+  Future<void> dispose() async {}
 }
 
 // --- Helpers ---------------------------------------------------------------
@@ -54,11 +68,14 @@ ValidateCapture _buildUseCase({
   required FakeMediaPipeFaceDetectionAnalyzer faceAnalyzer,
   required FakeHandAnalyzer handAnalyzer,
   required FakeFaceLandmarkerAnalyzer landmarkerAnalyzer,
+  FakeEyeContourAnalyzer? eyeContourAnalyzer,
 }) {
   return ValidateCapture(
     faceAnalyzer: faceAnalyzer,
     handAnalyzer: handAnalyzer,
     faceLandmarkerAnalyzer: landmarkerAnalyzer,
+    eyeContourAnalyzer: eyeContourAnalyzer ?? FakeEyeContourAnalyzer(),
+    eyeOcclusionCheck: const CheckNoEyeOcclusion(),
   );
 }
 
@@ -91,7 +108,10 @@ void main() {
         FaceLandmarkType.mouthBottom: Confidence(0.95),
       });
 
-      final result = await usecase(_frame, thresholds: _defaultThresholds);
+      final result = await usecase(
+        _frame,
+        thresholds: _defaultThresholds,
+      );
 
       expect(result.passed, isTrue);
       expect(result.failure, isNull);
@@ -101,7 +121,10 @@ void main() {
       faceAnalyzer.nextResult = const Ok([_goodFace]);
       landmarkerAnalyzer.nextResult = const Ok({});
 
-      final result = await usecase(_frame, thresholds: _defaultThresholds);
+      final result = await usecase(
+        _frame,
+        thresholds: _defaultThresholds,
+      );
 
       expect(result.passed, isTrue);
     });
@@ -111,7 +134,10 @@ void main() {
     test('face analyzer error → analyzerError', () async {
       faceAnalyzer.nextResult = Err(AnalyzerError('boom'));
 
-      final result = await usecase(_frame, thresholds: _defaultThresholds);
+      final result = await usecase(
+        _frame,
+        thresholds: _defaultThresholds,
+      );
 
       expect(result.failure, LivenessFailure.analyzerError);
     });
@@ -124,7 +150,10 @@ void main() {
         ),
       ]);
 
-      final result = await usecase(_frame, thresholds: _defaultThresholds);
+      final result = await usecase(
+        _frame,
+        thresholds: _defaultThresholds,
+      );
 
       expect(result.failure, LivenessFailure.noFace);
     });
@@ -156,7 +185,10 @@ void main() {
       faceAnalyzer.nextResult = const Ok([_goodFace]);
       handAnalyzer.nextResult = Err(AnalyzerError('hand boom'));
 
-      final result = await usecase(_frame, thresholds: _defaultThresholds);
+      final result = await usecase(
+        _frame,
+        thresholds: _defaultThresholds,
+      );
 
       expect(result.failure, LivenessFailure.analyzerError);
     });
@@ -165,12 +197,15 @@ void main() {
   group('check toggles', () {
     test('faceEnabled=false → empty face result passes', () async {
       faceAnalyzer.nextResult = const Ok([]); // would be noFace if enabled
-      // handAnalyzer defaults to Ok([])
 
       final result = await usecase(
         _frame,
         thresholds: _defaultThresholds,
-        checks: const PostCaptureChecks(faceEnabled: false, handEnabled: true),
+        checks: const PostCaptureChecks(
+          faceEnabled: false,
+          handEnabled: true,
+          eyeOcclusionEnabled: false,
+        ),
       );
 
       expect(result.passed, isTrue);
@@ -180,12 +215,16 @@ void main() {
     test('handEnabled=false → hand analyzer error is ignored', () async {
       faceAnalyzer.nextResult = const Ok([_goodFace]);
       landmarkerAnalyzer.nextResult = const Ok({});
-      handAnalyzer.nextResult = Err(AnalyzerError('hand boom')); // would be analyzerError if enabled
+      handAnalyzer.nextResult = Err(AnalyzerError('hand boom'));
 
       final result = await usecase(
         _frame,
         thresholds: _defaultThresholds,
-        checks: const PostCaptureChecks(faceEnabled: true, handEnabled: false),
+        checks: const PostCaptureChecks(
+          faceEnabled: true,
+          handEnabled: false,
+          eyeOcclusionEnabled: false,
+        ),
       );
 
       expect(result.passed, isTrue);
@@ -198,7 +237,11 @@ void main() {
       final result = await usecase(
         _frame,
         thresholds: _defaultThresholds,
-        checks: const PostCaptureChecks(faceEnabled: false, handEnabled: false),
+        checks: const PostCaptureChecks(
+          faceEnabled: false,
+          handEnabled: false,
+          eyeOcclusionEnabled: false,
+        ),
       );
 
       expect(result.passed, isTrue);
@@ -214,7 +257,10 @@ void main() {
         FaceLandmarkType.mouthLeft: Confidence(0.4),
       });
 
-      final result = await usecase(_frame, thresholds: _defaultThresholds);
+      final result = await usecase(
+        _frame,
+        thresholds: _defaultThresholds,
+      );
 
       expect(result.failure, LivenessFailure.objectOccluding);
     });
@@ -228,7 +274,10 @@ void main() {
         FaceLandmarkType.mouthBottom: Confidence(0.95),
       });
 
-      final result = await usecase(_frame, thresholds: _defaultThresholds);
+      final result = await usecase(
+        _frame,
+        thresholds: _defaultThresholds,
+      );
 
       expect(result.failure, LivenessFailure.objectOccluding);
     });
@@ -237,7 +286,10 @@ void main() {
       faceAnalyzer.nextResult = const Ok([_goodFace]);
       landmarkerAnalyzer.nextResult = Err(AnalyzerError('model crash'));
 
-      final result = await usecase(_frame, thresholds: _defaultThresholds);
+      final result = await usecase(
+        _frame,
+        thresholds: _defaultThresholds,
+      );
 
       expect(result.failure, LivenessFailure.analyzerError);
     });
@@ -246,7 +298,10 @@ void main() {
       faceAnalyzer.nextResult = const Ok([_goodFace]);
       landmarkerAnalyzer.nextResult = const Ok({});
 
-      final result = await usecase(_frame, thresholds: _defaultThresholds);
+      final result = await usecase(
+        _frame,
+        thresholds: _defaultThresholds,
+      );
 
       expect(result.passed, isTrue);
     });

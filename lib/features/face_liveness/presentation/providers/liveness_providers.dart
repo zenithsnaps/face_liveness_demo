@@ -10,9 +10,11 @@ import '../../../../core/env.dart';
 import '../../application/flow/liveness_flow_event.dart';
 import '../../application/flow/liveness_flow_machine.dart';
 import '../../application/flow/liveness_flow_state.dart';
+import '../../application/usecases/check_no_eye_occlusion.dart';
 import '../../application/usecases/run_pipeline.dart';
 import '../../application/usecases/validate_capture.dart';
 import '../../domain/entities/attempt_draft.dart';
+import '../../domain/repositories/eye_contour_analyzer.dart';
 import '../../domain/repositories/face_analyzer.dart';
 import '../../domain/repositories/hand_analyzer.dart';
 import '../../domain/repositories/liveness_result_repository.dart';
@@ -23,6 +25,7 @@ import '../../infrastructure/mediapipe/mediapipe_face_detection_analyzer.dart';
 import '../../infrastructure/mediapipe/mediapipe_face_landmarker_analyzer.dart';
 import '../../infrastructure/mediapipe/mediapipe_hand_analyzer.dart';
 import '../../infrastructure/mediapipe/mediapipe_object_analyzer.dart';
+import '../../infrastructure/mlkit/mlkit_eye_contour_analyzer.dart';
 import '../../infrastructure/mlkit/mlkit_face_analyzer.dart';
 import '../../infrastructure/platform_channels/mediapipe_channel.dart';
 import '../../infrastructure/supabase/supabase_liveness_result_repository.dart';
@@ -71,11 +74,19 @@ final faceLandmarkerAnalyzerProvider = Provider<MediaPipeFaceLandmarkerAnalyzer>
   return MediaPipeFaceLandmarkerAnalyzer(ref.read(mediaPipeChannelProvider));
 });
 
+final eyeContourAnalyzerProvider = Provider<EyeContourAnalyzer>((ref) {
+  final analyzer = MlKitEyeContourAnalyzer();
+  ref.onDispose(analyzer.dispose);
+  return analyzer;
+});
+
 final validateCaptureProvider = Provider<ValidateCapture>((ref) {
   return ValidateCapture(
     faceAnalyzer: ref.read(faceDetectionAnalyzerProvider),
     handAnalyzer: ref.read(handAnalyzerProvider),
     faceLandmarkerAnalyzer: ref.read(faceLandmarkerAnalyzerProvider),
+    eyeContourAnalyzer: ref.read(eyeContourAnalyzerProvider),
+    eyeOcclusionCheck: const CheckNoEyeOcclusion(),
   );
 });
 
@@ -94,12 +105,12 @@ class FlowController extends Notifier<LivenessFlowState> {
 
   void dispatch(LivenessFlowEvent event) {
     final machine = ref.read(flowMachineProvider);
-    final next = machine.reduce(state, event);
-    if (next != state) {
-      state = next;
-      if (next is FlowInitializing && state is! FlowEvaluating) {
-        ref.read(pipelineProvider).resetLivenessChallenges();
-      }
+    final previous = state;
+    final next = machine.reduce(previous, event);
+    if (next == previous) return;
+    state = next;
+    if (next is FlowInitializing && previous is! FlowEvaluating) {
+      ref.read(pipelineProvider).resetLivenessChallenges();
     }
   }
 

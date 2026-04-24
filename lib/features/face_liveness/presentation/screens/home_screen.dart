@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/app_strings.dart';
 import '../providers/post_capture_checks_provider.dart';
 import '../providers/post_capture_thresholds_provider.dart';
+import '../providers/pre_capture_checks_provider.dart';
 import '../providers/test_cases_provider.dart';
 import '../providers/tester_provider.dart';
 import 'face_liveness_screen.dart';
@@ -39,6 +40,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final ctrl = ref.read(postCaptureThresholdsProvider.notifier);
     final checks = ref.watch(postCaptureChecksProvider);
     final checksCtrl = ref.read(postCaptureChecksProvider.notifier);
+    final preChecks = ref.watch(preCaptureChecksProvider);
+    final preChecksCtrl = ref.read(preCaptureChecksProvider.notifier);
     final testCases = ref.watch(testCasesListProvider);
     final selectedCase = ref.watch(selectedTestCaseProvider);
 
@@ -143,6 +146,31 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
+                      'การตรวจสอบระหว่างเปิดกล้อง',
+                      style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                    ),
+                    SwitchListTile.adaptive(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Eye check', style: TextStyle(fontSize: 13)),
+                      subtitle: const Text(
+                        'ต้องเห็นดวงตาทั้งสองข้าง และลืมตา',
+                        style: TextStyle(fontSize: 11),
+                      ),
+                      value: preChecks.eyesEnabled,
+                      onChanged: preChecksCtrl.setEyesEnabled,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
                       'เลือกการตรวจสอบหลังถ่าย',
                       style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
                     ),
@@ -158,12 +186,23 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       value: checks.handEnabled,
                       onChanged: checksCtrl.setHandEnabled,
                     ),
+                    SwitchListTile.adaptive(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Eye occlusion (sunglasses)', style: TextStyle(fontSize: 13)),
+                      subtitle: const Text(
+                        'ตรวจวัตถุบังดวงตาหลังถ่าย',
+                        style: TextStyle(fontSize: 11),
+                      ),
+                      value: checks.eyeOcclusionEnabled,
+                      onChanged: checksCtrl.setEyeOcclusionEnabled,
+                    ),
                     Align(
                       alignment: Alignment.centerRight,
                       child: TextButton(
                         onPressed: () {
                           ref.invalidate(postCaptureChecksProvider);
                           ref.invalidate(postCaptureThresholdsProvider);
+                          ref.invalidate(preCaptureChecksProvider);
                         },
                         child: const Text('Reset to defaults'),
                       ),

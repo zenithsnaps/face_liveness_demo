@@ -7,6 +7,7 @@ import '../../../../core/app_strings.dart';
 import '../../application/usecases/post_capture_checks.dart';
 import '../../application/usecases/post_capture_thresholds.dart';
 import '../../application/usecases/validate_capture.dart';
+import '../../domain/entities/eye_occlusion_evidence.dart';
 import '../../domain/failures/liveness_failure.dart';
 import '../../domain/repositories/liveness_result_repository.dart';
 import '../providers/liveness_providers.dart';
@@ -158,7 +159,10 @@ class _ResultScreenState extends ConsumerState<ResultScreen> {
                 ),
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 8),
+            if (widget.validation.eyeEvidence != null)
+              _EyeEvidenceChip(evidence: widget.validation.eyeEvidence!),
+            const SizedBox(height: 8),
 
             // Cloud sync section (outside RepaintBoundary — not part of snapshot)
             if (supabaseEnabled) ...[
@@ -178,12 +182,7 @@ class _ResultScreenState extends ConsumerState<ResultScreen> {
               const SizedBox(height: 4),
             ],
 
-            const Text(
-              AppStrings.photoPathLabel,
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-            SelectableText(widget.photoPath),
-            const SizedBox(height: 16),
+            const SizedBox(height: 4),
             FilledButton(
               onPressed: () =>
                   Navigator.of(context).popUntil((r) => r.isFirst),
@@ -289,6 +288,84 @@ class _ResultScreenState extends ConsumerState<ResultScreen> {
       );
     }
     return const SizedBox.shrink();
+  }
+}
+
+class _EyeEvidenceChip extends StatelessWidget {
+  final EyeOcclusionEvidence evidence;
+  const _EyeEvidenceChip({required this.evidence});
+
+  @override
+  Widget build(BuildContext context) {
+    final flagColor =
+        evidence.occluded ? Colors.red.shade700 : Colors.grey.shade600;
+
+    String fmt(double v) => v.toStringAsFixed(1);
+    String fmtS(double v) => v.toStringAsFixed(2);
+
+    final rows = [
+      ('ดวงตาซ้าย  Lum / Sat',
+          '${fmt(evidence.leftEyeLuminance)} / ${fmtS(evidence.leftEyeSaturation)}'),
+      ('ดวงตาขวา  Lum / Sat',
+          '${fmt(evidence.rightEyeLuminance)} / ${fmtS(evidence.rightEyeSaturation)}'),
+      ('แก้ม (ref)  Lum',
+          fmt(evidence.referenceLuminance)),
+      ('Contrast  ซ้าย / ขวา',
+          '${fmt(evidence.leftContrast)} / ${fmt(evidence.rightContrast)}'),
+    ];
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade100,
+        border: Border.all(color: Colors.grey.shade300),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.remove_red_eye_outlined, size: 14, color: flagColor),
+              const SizedBox(width: 4),
+              Text(
+                'Eye occlusion${evidence.occluded ? ' · FLAGGED' : ' · ok'}',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: flagColor,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          ...rows.map(
+            (r) => Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      r.$1,
+                      style: const TextStyle(fontSize: 11, color: Colors.black54),
+                    ),
+                  ),
+                  Text(
+                    r.$2,
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontFamily: 'monospace',
+                      color: Colors.black87,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 

@@ -1,12 +1,17 @@
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
+
+import '../../domain/entities/eye_occlusion_evidence.dart';
 import '../../domain/entities/frame_data.dart';
 import '../../domain/entities/frame_metadata.dart';
 import '../../domain/entities/hand_snapshot.dart';
 import '../../domain/failures/liveness_failure.dart';
+import '../../domain/repositories/eye_contour_analyzer.dart';
 import '../../domain/repositories/face_landmarker_analyzer.dart';
 import '../../domain/repositories/hand_analyzer.dart';
 import '../../infrastructure/mediapipe/mediapipe_face_detection_analyzer.dart';
+import 'check_no_eye_occlusion.dart';
 import 'post_capture_checks.dart';
 import 'post_capture_thresholds.dart';
 
@@ -35,6 +40,10 @@ class CaptureValidationResult {
   /// Metadata of the decoded JPEG frame (dimensions, rotation).
   final FrameMetadata? frameMeta;
 
+  /// Pixel-analysis measurements from the eye-occlusion check (null when
+  /// the check was skipped or no face was found by the contour detector).
+  final EyeOcclusionEvidence? eyeEvidence;
+
   const CaptureValidationResult({
     this.faceScore,
     this.failure,
@@ -43,6 +52,7 @@ class CaptureValidationResult {
     this.hands = const [],
     this.handsDetected = 0,
     this.frameMeta,
+    this.eyeEvidence,
   });
 
   bool get passed => failure == null;
@@ -55,20 +65,27 @@ class CaptureValidationResult {
 ///   2. Hand analyzer error → [LivenessFailure.analyzerError]  (if handEnabled)
 ///   3. Any confident hand present → [LivenessFailure.handOccluding]  (if handEnabled)
 ///   4. No face passes score ≥ [PostCaptureThresholds.faceScore] → [LivenessFailure.noFace]  (if faceEnabled)
-///   5. All clear → passed with [faceScore]
+///   5. Eye occlusion detected → [LivenessFailure.eyeOccluded]  (if eyeOcclusionEnabled)
+///   6. All clear → passed with [faceScore]
 class ValidateCapture {
   final MediaPipeFaceDetectionAnalyzer _faceAnalyzer;
   final HandAnalyzer _handAnalyzer;
   // ignore: unused_field
   final FaceLandmarkerAnalyzer _faceLandmarkerAnalyzer;
+  final EyeContourAnalyzer _eyeContourAnalyzer;
+  final CheckNoEyeOcclusion _eyeOcclusionCheck;
 
   const ValidateCapture({
     required MediaPipeFaceDetectionAnalyzer faceAnalyzer,
     required HandAnalyzer handAnalyzer,
     required FaceLandmarkerAnalyzer faceLandmarkerAnalyzer,
+    required EyeContourAnalyzer eyeContourAnalyzer,
+    required CheckNoEyeOcclusion eyeOcclusionCheck,
   })  : _faceAnalyzer = faceAnalyzer,
         _handAnalyzer = handAnalyzer,
-        _faceLandmarkerAnalyzer = faceLandmarkerAnalyzer;
+        _faceLandmarkerAnalyzer = faceLandmarkerAnalyzer,
+        _eyeContourAnalyzer = eyeContourAnalyzer,
+        _eyeOcclusionCheck = eyeOcclusionCheck;
 
   Future<CaptureValidationResult> call(
     FrameData frame, {
@@ -148,11 +165,47 @@ class ValidateCapture {
 
     // TODO: FaceLandmarker occlusion check temporarily disabled.
 
+    // --- Eye-occlusion pixel analysis ---
+    // Failures here are best-effort: if ML Kit can't find the face or errors out,
+    // we skip rather than blocking a clean capture on an analyzer hiccup.
+    debugPrint('[EyeOcclusion] reached check block — '
+        'eyeOcclusionEnabled=${checks.eyeOcclusionEnabled} '
+        'frame=${frame.width}x${frame.height}');
+    EyeOcclusionEvidence? eyeEvidence;
+    if (checks.eyeOcclusionEnabled) {
+      final regionsResult = await _eyeContourAnalyzer.analyze(frame);
+      debugPrint('[EyeOcclusion] contour result: '
+          'isOk=${regionsResult.isOk} '
+          'hasRegions=${regionsResult.okOrNull != null} '
+          'err=${regionsResult.errOrNull}');
+      if (regionsResult.isOk && regionsResult.okOrNull != null) {
+        final regions = regionsResult.okOrNull!;
+        debugPrint('[EyeOcclusion] leftEye pts=${regions.leftEye.length} '
+            'rightEye pts=${regions.rightEye.length} '
+            'leftCheek=${regions.leftCheek} '
+            'rightCheek=${regions.rightCheek}');
+        final evidence = _eyeOcclusionCheck(frame: frame, regions: regions);
+        debugPrint('[EyeOcclusion] evidence: $evidence');
+        eyeEvidence = evidence;
+        if (evidence.occluded) {
+          return CaptureValidationResult(
+            faceScore: bestPassing,
+            failure: LivenessFailure.eyeOccluded,
+            faceScores: allScores,
+            facesDetected: facesDetected,
+            frameMeta: meta,
+            eyeEvidence: eyeEvidence,
+          );
+        }
+      }
+    }
+
     return CaptureValidationResult(
       faceScore: bestPassing,
       faceScores: allScores,
       facesDetected: facesDetected,
       frameMeta: meta,
+      eyeEvidence: eyeEvidence,
     );
   }
 }

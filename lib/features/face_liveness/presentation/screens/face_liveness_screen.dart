@@ -22,6 +22,7 @@ import '../providers/face_score_samples_provider.dart';
 import '../providers/liveness_providers.dart';
 import '../providers/post_capture_checks_provider.dart';
 import '../providers/post_capture_thresholds_provider.dart';
+import '../providers/pre_capture_checks_provider.dart';
 import '../providers/test_cases_provider.dart';
 import '../providers/tester_provider.dart';
 import '../widgets/face_oval_overlay.dart';
@@ -79,6 +80,7 @@ class _FaceLivenessScreenState extends ConsumerState<FaceLivenessScreen>
 
   Future<void> _bootstrap() async {
     final controller = ref.read(flowControllerProvider.notifier);
+    controller.reset();
     controller.dispatch(const StartRequested());
     ref.read(attemptDraftProvider.notifier).startNew();
     ref.read(faceScoreSamplesProvider.notifier).clear();
@@ -156,7 +158,10 @@ class _FaceLivenessScreenState extends ConsumerState<FaceLivenessScreen>
       ovalGuide: ovalGuide,
       frame: frame.metadata,
     );
-    final outcome = ref.read(pipelineProvider).evaluate(flow.gate, input);
+    final preChecks = ref.read(preCaptureChecksProvider);
+    final outcome = ref
+        .read(pipelineProvider)
+        .evaluate(flow.gate, input, checks: preChecks);
 
     if (!mounted) return;
     final controller = ref.read(flowControllerProvider.notifier);

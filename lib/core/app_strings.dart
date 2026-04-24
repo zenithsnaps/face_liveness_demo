@@ -12,6 +12,7 @@ class AppStrings {
   static const String moveFarther = 'ขยับออกเล็กน้อย';
   static const String lookStraight = 'กรุณามองตรงเข้ากล้อง';
   static const String openEyes = 'กรุณาลืมตาทั้งสองข้าง';
+  static const String eyesNotVisible = 'ไม่พบดวงตา กรุณาเปิดหน้าให้เห็นดวงตาทั้งสองข้าง';
 
   // Liveness challenges
   static const String pleaseSmile = 'กรุณายิ้ม';
@@ -20,6 +21,7 @@ class AppStrings {
   // Occlusion — failure messages (shown when occlusion detected)
   static const String handCoveringFace = 'ตรวจพบมือใน frame กรุณาเอามือออกจากกล้อง';
   static const String objectCoveringFace = 'ตรวจพบสิ่งของบังใบหน้า กรุณาเอาออก';
+  static const String eyeOccluded = 'ตรวจพบวัตถุบังดวงตา กรุณาเอาออก';
 
   // Occlusion — gate instructions (shown when gate is active but no issue detected yet)
   static const String checkHandOcclusion = 'กรุณาแน่ใจว่าไม่มีมือบังใบหน้า';

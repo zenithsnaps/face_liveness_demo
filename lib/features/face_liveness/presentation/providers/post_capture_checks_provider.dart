@@ -8,6 +8,8 @@ class PostCaptureChecksController extends Notifier<PostCaptureChecks> {
 
   void setFaceEnabled(bool v) => state = state.copyWith(faceEnabled: v);
   void setHandEnabled(bool v) => state = state.copyWith(handEnabled: v);
+  void setEyeOcclusionEnabled(bool v) =>
+      state = state.copyWith(eyeOcclusionEnabled: v);
 }
 
 final postCaptureChecksProvider =
