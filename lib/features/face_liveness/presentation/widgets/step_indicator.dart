@@ -12,7 +12,6 @@ class StepIndicator extends StatelessWidget {
   Widget build(BuildContext context) {
     final steps = [
       (_StepPhase.frame, AppStrings.stepFrame),
-      (_StepPhase.liveness, AppStrings.stepLiveness),
     ];
     final activePhase = _phaseFor(currentGate);
 

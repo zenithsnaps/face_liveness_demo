@@ -49,6 +49,14 @@ class CameraFrameSource {
       imageFormatGroup: format,
     );
     await controller.initialize();
+    // Disable flash. On iOS, the default `auto` mode uses the screen as a
+    // selfie flash on the front camera — that's the white screen flash users
+    // see at the moment of capture. We never want it for a liveness check.
+    try {
+      await controller.setFlashMode(FlashMode.off);
+    } catch (_) {
+      // Some devices/cameras don't support setFlashMode; ignore.
+    }
     _controller = controller;
   }
 

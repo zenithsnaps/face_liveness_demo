@@ -23,6 +23,7 @@ import '../providers/liveness_providers.dart';
 import '../providers/post_capture_checks_provider.dart';
 import '../providers/post_capture_thresholds_provider.dart';
 import '../providers/test_cases_provider.dart';
+import '../providers/tester_provider.dart';
 import '../widgets/face_oval_overlay.dart';
 import '../widgets/face_score_chart.dart';
 import '../widgets/instruction_banner.dart';
@@ -222,6 +223,7 @@ class _FaceLivenessScreenState extends ConsumerState<FaceLivenessScreen>
     final thresholds = ref.read(postCaptureThresholdsProvider);
     final checks = ref.read(postCaptureChecksProvider);
     final testCase = ref.read(selectedTestCaseProvider);
+    final tester = ref.read(testerNameProvider).valueOrNull;
     final result = await ref.read(validateCaptureProvider).call(
           frame,
           thresholds: thresholds,
@@ -236,14 +238,18 @@ class _FaceLivenessScreenState extends ConsumerState<FaceLivenessScreen>
     }
     if (!mounted) return;
     Navigator.of(context).pushReplacement(
-      MaterialPageRoute(
-        builder: (_) => ResultScreen(
+      PageRouteBuilder(
+        transitionDuration: const Duration(milliseconds: 200),
+        pageBuilder: (_, _, _) => ResultScreen(
           photoPath: path,
           validation: result,
           thresholds: thresholds,
           checks: checks,
           testCase: testCase,
+          tester: tester,
         ),
+        transitionsBuilder: (_, anim, _, child) =>
+            FadeTransition(opacity: anim, child: child),
       ),
     );
   }
@@ -261,7 +267,7 @@ class _FaceLivenessScreenState extends ConsumerState<FaceLivenessScreen>
       body: SafeArea(
         child: Stack(
           children: [
-            if (_initialized && camera.controller != null)
+            if (_initialized && camera.controller != null && flow is! FlowCapturing)
               Positioned.fill(
                 child: FittedBox(
                   fit: BoxFit.cover,

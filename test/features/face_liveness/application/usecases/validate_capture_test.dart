@@ -120,7 +120,7 @@ void main() {
       faceAnalyzer.nextResult = const Ok([
         FaceDetection(
           boundingBox: Rect2D.fromLTWH(0, 0, 100, 100),
-          score: Confidence(0.60),
+          score: Confidence(0.40),
         ),
       ]);
 
@@ -130,7 +130,6 @@ void main() {
     });
 
     test('face score below custom threshold → noFace, same score above custom threshold → passed', () async {
-      // Score of 0.92 — below default (0.95), so noFace.
       const lowFace = FaceDetection(
         boundingBox: Rect2D.fromLTWH(100, 100, 200, 250),
         score: Confidence(0.92),
@@ -140,11 +139,10 @@ void main() {
 
       final failResult = await usecase(
         _frame,
-        thresholds: _defaultThresholds, // faceScore = 0.95
+        thresholds: _defaultThresholds.copyWith(faceScore: 0.95),
       );
       expect(failResult.failure, LivenessFailure.noFace);
 
-      // Lower threshold to 0.90 → same score now passes.
       final passResult = await usecase(
         _frame,
         thresholds: _defaultThresholds.copyWith(faceScore: 0.90),

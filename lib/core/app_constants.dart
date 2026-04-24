@@ -27,10 +27,8 @@ class AppConstants {
   static const double handDetectionMinConfidence = 0.5;
 
   // Post-capture validation thresholds
-  static const double faceDetectionMinScore = 0.95;
-  // Match the hand landmarker's own minHandDetectionConfidence so that any
-  // hand that passes the model's internal threshold is counted as a block.
-  static const double postCaptureHandMinConfidence = 0.5;
+  static const double faceDetectionMinScore = 0.50;
+  static const double postCaptureHandMinConfidence = 0.10;
 
   // Flow machine
   static const int debounceFrames = 5;

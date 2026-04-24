@@ -47,6 +47,7 @@ abstract class LivenessResultRepository {
     required Uint8List? summaryPng,
     required DeviceContext device,
     required String? testCase,
+    required String? testerName,
   });
 
   /// Fetch the most recent [limit] attempts, optionally filtered to rows

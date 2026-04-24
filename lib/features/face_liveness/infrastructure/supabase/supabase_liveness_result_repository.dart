@@ -29,6 +29,7 @@ class SupabaseLivenessResultRepository implements LivenessResultRepository {
     required Uint8List? summaryPng,
     required DeviceContext device,
     required String? testCase,
+    required String? testerName,
   }) async {
     final attemptId = draft.id;
     String? summaryObjectPath;
@@ -69,6 +70,7 @@ class SupabaseLivenessResultRepository implements LivenessResultRepository {
         'face_check_enabled': checks.faceEnabled,
         'hand_check_enabled': checks.handEnabled,
         'test_case': ?testCase,
+        'tester_name': ?testerName,
         'started_at': draft.startedAt.toIso8601String(),
         'completed_at': completedAt.toIso8601String(),
         'summary_bucket': summaryUrl != null ? 'liveness-summaries' : null,

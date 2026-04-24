@@ -19,6 +19,7 @@ class ResultScreen extends ConsumerStatefulWidget {
   final PostCaptureThresholds thresholds;
   final PostCaptureChecks checks;
   final String? testCase;
+  final String? tester;
 
   const ResultScreen({
     super.key,
@@ -27,6 +28,7 @@ class ResultScreen extends ConsumerStatefulWidget {
     required this.thresholds,
     required this.checks,
     required this.testCase,
+    this.tester,
   });
 
   @override
@@ -93,6 +95,7 @@ class _ResultScreenState extends ConsumerState<ResultScreen> {
       summaryPng: png,
       device: device,
       testCase: widget.testCase,
+      testerName: widget.tester,
     );
 
     if (!mounted) return;

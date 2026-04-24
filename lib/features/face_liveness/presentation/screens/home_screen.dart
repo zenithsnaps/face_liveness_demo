@@ -5,13 +5,36 @@ import '../../../../core/app_strings.dart';
 import '../providers/post_capture_checks_provider.dart';
 import '../providers/post_capture_thresholds_provider.dart';
 import '../providers/test_cases_provider.dart';
+import '../providers/tester_provider.dart';
 import 'face_liveness_screen.dart';
 
-class HomeScreen extends ConsumerWidget {
+class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends ConsumerState<HomeScreen> {
+  final _testerController = TextEditingController();
+  bool _seeded = false;
+
+  @override
+  void dispose() {
+    _testerController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final testerAsync = ref.watch(testerNameProvider);
+    testerAsync.whenData((name) {
+      if (!_seeded) {
+        _seeded = true;
+        _testerController.text = name;
+      }
+    });
+
     final thresholds = ref.watch(postCaptureThresholdsProvider);
     final ctrl = ref.read(postCaptureThresholdsProvider.notifier);
     final checks = ref.watch(postCaptureChecksProvider);
@@ -27,14 +50,31 @@ class HomeScreen extends ConsumerWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Icon(Icons.face_retouching_natural, size: 120, color: Colors.black54),
-            const SizedBox(height: 24),
-            const Text(
-              AppStrings.homeSubtitle,
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 16),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'ชื่อผู้ทดสอบ',
+                      style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: _testerController,
+                      decoration: const InputDecoration(
+                        hintText: 'พิมพ์ชื่อผู้ทดสอบ',
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                      textInputAction: TextInputAction.done,
+                    ),
+                  ],
+                ),
+              ),
             ),
-            const SizedBox(height: 32),
+            const SizedBox(height: 12),
             Card(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
@@ -160,14 +200,6 @@ class HomeScreen extends ConsumerWidget {
                       divisions: 90,
                       onChanged: ctrl.setHandConfidence,
                     ),
-                    _ThresholdSlider(
-                      label: 'Landmark visibility',
-                      value: thresholds.landmarkVisibility,
-                      min: 0.10,
-                      max: 1.00,
-                      divisions: 90,
-                      onChanged: ctrl.setLandmarkVisibility,
-                    ),
                   ],
                 ),
               ),
@@ -177,7 +209,11 @@ class HomeScreen extends ConsumerWidget {
               style: FilledButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 16),
               ),
-              onPressed: () {
+              onPressed: () async {
+                await ref
+                    .read(testerNameProvider.notifier)
+                    .set(_testerController.text);
+                if (!context.mounted) return;
                 Navigator.of(context).push(
                   MaterialPageRoute(
                     builder: (_) => const FaceLivenessScreen(),

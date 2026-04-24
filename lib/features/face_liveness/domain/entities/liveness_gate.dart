@@ -9,7 +9,5 @@ enum LivenessGate {
 
   static const List<LivenessGate> orderedPipeline = [
     faceQuality,
-    livenessSmile,
-    livenessBlink,
   ];
 }

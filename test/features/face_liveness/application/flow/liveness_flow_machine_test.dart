@@ -52,7 +52,7 @@ void main() {
   });
 
   group('debounce and advance', () {
-    test('${AppConstants.debounceFrames} consecutive passes advances to next gate', () {
+    test('${AppConstants.debounceFrames} consecutive passes on the only gate → FlowCapturing', () {
       LivenessFlowState state = FlowEvaluating(
         gate: LivenessGate.faceQuality,
         consecutivePasses: 0,
@@ -63,9 +63,7 @@ void main() {
           FrameAnalyzed(pass(LivenessGate.faceQuality)),
         );
       }
-      expect(state, isA<FlowEvaluating>());
-      expect((state as FlowEvaluating).gate, LivenessGate.livenessSmile);
-      expect(state.consecutivePasses, 0);
+      expect(state, isA<FlowCapturing>());
     });
 
     test('a failure resets consecutivePasses and surfaces lastFailure', () {
