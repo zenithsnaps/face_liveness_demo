@@ -2,14 +2,17 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 
 import '../../../application/analytics/face_score_stats.dart' as stats;
+import '../../providers/analytics_provider.dart';
 
 /// Bar chart (20 buckets × 0.05 width) with vertical marker lines for
 /// mean (yellow), median (orange), and threshold (cyan).
+/// [yMode] switches y-axis between raw count and density (% of total).
 class HistogramChart extends StatelessWidget {
   final List<double> scores;
   final double threshold;
   final double mean;
   final double median;
+  final HistogramYMode yMode;
 
   const HistogramChart({
     super.key,
@@ -17,6 +20,7 @@ class HistogramChart extends StatelessWidget {
     required this.threshold,
     required this.mean,
     required this.median,
+    this.yMode = HistogramYMode.count,
   });
 
   @override
@@ -28,8 +32,13 @@ class HistogramChart extends StatelessWidget {
       );
     }
 
+    final isDensity = yMode == HistogramYMode.density;
     final counts = stats.histogramBuckets(scores, buckets: 20);
-    final maxCount = counts.reduce((a, b) => a > b ? a : b);
+    final total = scores.length;
+    final barValues = isDensity
+        ? counts.map((c) => c / total * 100).toList() // percent 0–100
+        : counts.map((c) => c.toDouble()).toList();
+    final maxVal = barValues.reduce((a, b) => a > b ? a : b);
 
     final bars = List.generate(20, (i) {
       final fill = i * 5.0 >= threshold * 100
@@ -39,7 +48,7 @@ class HistogramChart extends StatelessWidget {
         x: i,
         barRods: [
           BarChartRodData(
-            toY: counts[i].toDouble(),
+            toY: barValues[i],
             color: fill,
             width: double.maxFinite,
             borderRadius: BorderRadius.circular(2),
@@ -56,12 +65,14 @@ class HistogramChart extends StatelessWidget {
       height: 200,
       child: BarChart(
         BarChartData(
-          maxY: maxCount.toDouble() * 1.15,
+          maxY: maxVal * 1.15,
           barGroups: bars,
           gridData: FlGridData(
             show: true,
             drawVerticalLine: false,
-            horizontalInterval: (maxCount / 4).ceilToDouble().clamp(1, double.maxFinite),
+            horizontalInterval: isDensity
+                ? (maxVal / 4).ceilToDouble().clamp(1, double.maxFinite)
+                : (maxVal / 4).ceilToDouble().clamp(1, double.maxFinite),
             getDrawingHorizontalLine: (_) => FlLine(
               color: Colors.white.withValues(alpha: 0.12),
               strokeWidth: 1,
@@ -88,9 +99,9 @@ class HistogramChart extends StatelessWidget {
             leftTitles: AxisTitles(
               sideTitles: SideTitles(
                 showTitles: true,
-                reservedSize: 32,
+                reservedSize: 38,
                 getTitlesWidget: (v, _) => Text(
-                  v.toInt().toString(),
+                  isDensity ? '${v.toStringAsFixed(0)}%' : v.toInt().toString(),
                   style: const TextStyle(color: Colors.white54, fontSize: 10),
                 ),
               ),

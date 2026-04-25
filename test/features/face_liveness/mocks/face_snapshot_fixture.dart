@@ -1,6 +1,7 @@
 import 'package:face_liveness_demo/features/face_liveness/domain/entities/face_snapshot.dart';
 import 'package:face_liveness_demo/features/face_liveness/domain/value_objects/confidence.dart';
 import 'package:face_liveness_demo/features/face_liveness/domain/value_objects/euler_angles.dart';
+import 'package:face_liveness_demo/features/face_liveness/domain/value_objects/point2d.dart';
 import 'package:face_liveness_demo/features/face_liveness/domain/value_objects/rect2d.dart';
 
 /// Pure-Dart helper that builds a plausible [FaceSnapshot] centered in an
@@ -17,6 +18,7 @@ FaceSnapshot buildFaceSnapshot({
   double yaw = 0,
   double pitch = 0,
   double roll = 0,
+  bool omitEyeLandmarks = false,
   Map<FaceLandmarkType, Confidence> landmarkVisibility = const {},
 }) {
   final w = ovalWidth * widthRatio;
@@ -29,12 +31,21 @@ FaceSnapshot buildFaceSnapshot({
     w,
     h,
   );
+
+  final landmarks = omitEyeLandmarks
+      ? const <FaceLandmarkType, Point2D>{}
+      : <FaceLandmarkType, Point2D>{
+          FaceLandmarkType.leftEye: Point2D(centerX - w * 0.15, centerY - h * 0.1),
+          FaceLandmarkType.rightEye: Point2D(centerX + w * 0.15, centerY - h * 0.1),
+        };
+
   return FaceSnapshot(
     boundingBox: bbox,
     headPose: EulerAngles(yaw: yaw, pitch: pitch, roll: roll),
     smilingProbability: Confidence.clamped(smile),
     leftEyeOpenProbability: Confidence.clamped(leftEye),
     rightEyeOpenProbability: Confidence.clamped(rightEye),
+    landmarks: landmarks,
     landmarkVisibility: landmarkVisibility,
   );
 }

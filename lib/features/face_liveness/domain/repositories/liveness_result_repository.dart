@@ -51,9 +51,11 @@ abstract class LivenessResultRepository {
   });
 
   /// Fetch the most recent [limit] attempts, optionally filtered to rows
-  /// completed on or after [since]. Rows are returned newest-first.
+  /// completed on or after [since] and/or before [until].
+  /// Rows are returned newest-first.
   Future<List<AttemptRecord>> fetchAttempts({
     DateTime? since,
+    DateTime? until,
     int limit = 1000,
   });
 }

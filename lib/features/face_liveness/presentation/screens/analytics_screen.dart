@@ -1,15 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 
 import '../../application/analytics/face_score_stats.dart' as stats;
+import '../../domain/entities/attempt_record.dart';
+import '../../domain/failures/liveness_failure.dart';
 import '../providers/analytics_provider.dart';
 import '../providers/test_cases_provider.dart';
 import '../utils/share_png.dart';
 import '../widgets/analytics/box_plot_per_case_chart.dart';
 import '../widgets/analytics/confusion_matrix_card.dart';
+import '../widgets/analytics/far_frr_curve_chart.dart';
 import '../widgets/analytics/histogram_chart.dart';
+import '../widgets/analytics/label_split_histogram_chart.dart';
 import '../widgets/analytics/pass_rate_curve_chart.dart';
 import '../widgets/analytics/test_case_label_editor.dart';
+
+final _dtFmt = DateFormat('d MMM yy HH:mm');
 
 class AnalyticsScreen extends ConsumerStatefulWidget {
   const AnalyticsScreen({super.key});
@@ -22,21 +29,94 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
   final _fullKey = GlobalKey();
   final _passRateKey = GlobalKey();
   final _histKey = GlobalKey();
+  final _labelHistKey = GlobalKey();
+  final _farFrrKey = GlobalKey();
   final _boxKey = GlobalKey();
   final _confKey = GlobalKey();
+
+  Future<void> _pickCustomRange() async {
+    final now = DateTime.now();
+    final filters = ref.read(analyticsFiltersProvider);
+
+    final initialRange = (filters.range == AnalyticsDateRange.custom &&
+            filters.customFrom != null &&
+            filters.customUntil != null)
+        ? DateTimeRange(start: filters.customFrom!, end: filters.customUntil!)
+        : DateTimeRange(
+            start: now.subtract(const Duration(days: 7)),
+            end: now,
+          );
+
+    final picked = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(2020),
+      lastDate: now.add(const Duration(days: 1)),
+      initialDateRange: initialRange,
+      builder: (ctx, child) => Theme(
+        data: _darkPickerTheme(),
+        child: child!,
+      ),
+    );
+    if (picked == null || !mounted) return;
+
+    final startTime = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(filters.customFrom ?? picked.start),
+      helpText: 'เวลาเริ่มต้น',
+      builder: (ctx, child) => Theme(data: _darkPickerTheme(), child: child!),
+    );
+    if (!mounted) return;
+
+    final endTime = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(
+          filters.customUntil ?? picked.end.copyWith(hour: 23, minute: 59)),
+      helpText: 'เวลาสิ้นสุด',
+      builder: (ctx, child) => Theme(data: _darkPickerTheme(), child: child!),
+    );
+    if (!mounted) return;
+
+    final from = DateTime(
+      picked.start.year, picked.start.month, picked.start.day,
+      startTime?.hour ?? 0, startTime?.minute ?? 0,
+    );
+    final until = DateTime(
+      picked.end.year, picked.end.month, picked.end.day,
+      endTime?.hour ?? 23, endTime?.minute ?? 59, 59,
+    );
+
+    ref.read(analyticsFiltersProvider.notifier).setCustomRange(from, until);
+  }
+
+  ThemeData _darkPickerTheme() => ThemeData(
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: Colors.cyan,
+          brightness: Brightness.dark,
+        ),
+        useMaterial3: true,
+      );
 
   @override
   Widget build(BuildContext context) {
     final attemptsAsync = ref.watch(analyticsAttemptsProvider);
     final threshold = ref.watch(analyticsThresholdProvider);
     final filters = ref.watch(analyticsFiltersProvider);
+    final histYMode = ref.watch(histogramYModeProvider);
     final allCases =
         ref.watch(testCasesListProvider).valueOrNull ?? const <String>[];
     final labels =
         ref.watch(testCaseLabelsProvider).valueOrNull ??
             const <String, TestCaseLabel>{};
 
-    return Scaffold(
+    return Theme(
+      data: ThemeData(
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: Colors.cyan,
+          brightness: Brightness.dark,
+        ),
+        useMaterial3: true,
+      ),
+      child: Scaffold(
       backgroundColor: const Color(0xFF121212),
       appBar: AppBar(
         backgroundColor: Colors.transparent,
@@ -90,6 +170,31 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
             groups.putIfAbsent(key, () => []).add(a.faceScore!);
           }
 
+          // Group by Live/Spoof label for density histogram + FAR/FRR
+          TestCaseLabel labelOf(AttemptRecord a) =>
+              labels[a.testCase] ?? TestCaseLabel.unlabeled;
+          final scoresByLabel = <TestCaseLabel, List<double>>{};
+          for (final a in attempts) {
+            if (a.faceScore == null) continue;
+            scoresByLabel
+                .putIfAbsent(labelOf(a), () => [])
+                .add(a.faceScore!);
+          }
+          final liveScores =
+              scoresByLabel[TestCaseLabel.live] ?? const <double>[];
+          final spoofScores =
+              scoresByLabel[TestCaseLabel.spoof] ?? const <double>[];
+
+          // Failure reasons present in data ∪ default excluded set
+          final presentReasons = attempts
+              .where((a) => a.failureReason != null)
+              .map((a) => a.failureReason!)
+              .toSet();
+          final shownReasons = {
+            ...AnalyticsFilters.defaultExcludedFailures,
+            ...presentReasons,
+          };
+
           return SingleChildScrollView(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
             child: RepaintBoundary(
@@ -104,21 +209,39 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Row(
+                          Wrap(
+                            spacing: 6,
+                            runSpacing: 4,
                             children: AnalyticsDateRange.values.map((r) {
                               final selected = filters.range == r;
-                              return Padding(
-                                padding: const EdgeInsets.only(right: 6),
-                                child: ChoiceChip(
-                                  label: Text(r.label),
-                                  selected: selected,
-                                  onSelected: (_) => ref
-                                      .read(analyticsFiltersProvider.notifier)
-                                      .setRange(r),
-                                ),
+                              return ChoiceChip(
+                                label: Text(r.label),
+                                selected: selected,
+                                onSelected: (_) {
+                                  if (r == AnalyticsDateRange.custom) {
+                                    _pickCustomRange();
+                                  } else {
+                                    ref
+                                        .read(analyticsFiltersProvider.notifier)
+                                        .setRange(r);
+                                  }
+                                },
                               );
                             }).toList(),
                           ),
+                          if (filters.range == AnalyticsDateRange.custom &&
+                              filters.customFrom != null &&
+                              filters.customUntil != null) ...[
+                            const SizedBox(height: 4),
+                            GestureDetector(
+                              onTap: _pickCustomRange,
+                              child: Text(
+                                '${_dtFmt.format(filters.customFrom!)}  –  ${_dtFmt.format(filters.customUntil!)}',
+                                style: const TextStyle(
+                                    color: Colors.cyanAccent, fontSize: 11),
+                              ),
+                            ),
+                          ],
                           if (allCases.isNotEmpty) ...[
                             const SizedBox(height: 8),
                             Wrap(
@@ -144,6 +267,62 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
                                 child: const Text('ล้าง filter'),
                               ),
                           ],
+                          // ── Failure-reason filter ────────────────────────
+                          const SizedBox(height: 10),
+                          Row(
+                            children: [
+                              const Expanded(
+                                child: Text(
+                                  'ไม่นับเคสที่ check อื่นจับได้',
+                                  style: TextStyle(
+                                      color: Colors.white54,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600),
+                                ),
+                              ),
+                              TextButton(
+                                style: TextButton.styleFrom(
+                                    padding: EdgeInsets.zero,
+                                    minimumSize: Size.zero,
+                                    tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+                                onPressed: () => ref
+                                    .read(analyticsFiltersProvider.notifier)
+                                    .resetExcludedFailures(),
+                                child: const Text('reset',
+                                    style: TextStyle(fontSize: 11)),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Wrap(
+                            spacing: 6,
+                            runSpacing: 4,
+                            children: shownReasons.map((reason) {
+                              final excluded =
+                                  filters.excludedFailures.contains(reason);
+                              final thai = _failureThai(reason);
+                              return FilterChip(
+                                label: Text(thai,
+                                    style: const TextStyle(fontSize: 11)),
+                                selected: excluded,
+                                selectedColor:
+                                    Colors.redAccent.withValues(alpha: 0.25),
+                                checkmarkColor: Colors.redAccent,
+                                onSelected: (_) => ref
+                                    .read(analyticsFiltersProvider.notifier)
+                                    .toggleExcludedFailure(reason),
+                              );
+                            }).toList(),
+                          ),
+                          if (filters.excludedFailures.isNotEmpty)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 4),
+                              child: Text(
+                                'กรองเคสที่ถูก reject จาก check อื่นออก เพื่อ tune face_score threshold จากเคสที่เหลือ',
+                                style: const TextStyle(
+                                    color: Colors.white24, fontSize: 10),
+                              ),
+                            ),
                           const SizedBox(height: 4),
                           Text(
                             '${attempts.length} attempts'
@@ -234,11 +413,57 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
                       repaintKey: _histKey,
                       title: 'Histogram (face_score distribution)',
                       shareFilename: 'histogram.png',
+                      headerTrailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _ModeChip(
+                            label: 'Count',
+                            selected: histYMode == HistogramYMode.count,
+                            onTap: () => ref
+                                .read(histogramYModeProvider.notifier)
+                                .set(HistogramYMode.count),
+                          ),
+                          const SizedBox(width: 4),
+                          _ModeChip(
+                            label: 'Density',
+                            selected: histYMode == HistogramYMode.density,
+                            onTap: () => ref
+                                .read(histogramYModeProvider.notifier)
+                                .set(HistogramYMode.density),
+                          ),
+                        ],
+                      ),
                       child: HistogramChart(
                         scores: scores,
                         threshold: threshold,
                         mean: mean,
                         median: med,
+                        yMode: histYMode,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+
+                    // ── Label-split density histogram ────────────────────
+                    _ChartCard(
+                      repaintKey: _labelHistKey,
+                      title: 'Histogram Live vs Spoof (density)',
+                      shareFilename: 'label_split_histogram.png',
+                      child: LabelSplitHistogramChart(
+                        scoresByLabel: scoresByLabel,
+                        threshold: threshold,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+
+                    // ── FAR / FRR curve ──────────────────────────────────
+                    _ChartCard(
+                      repaintKey: _farFrrKey,
+                      title: 'FAR / FRR curve + EER',
+                      shareFilename: 'far_frr_curve.png',
+                      child: FarFrrCurveChart(
+                        liveScores: liveScores,
+                        spoofScores: spoofScores,
+                        threshold: threshold,
                       ),
                     ),
                     const SizedBox(height: 12),
@@ -288,6 +513,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
           );
         },
       ),
+      ),
     );
   }
 }
@@ -313,12 +539,14 @@ class _ChartCard extends StatelessWidget {
   final String title;
   final String shareFilename;
   final Widget child;
+  final Widget? headerTrailing;
 
   const _ChartCard({
     required this.repaintKey,
     required this.title,
     required this.shareFilename,
     required this.child,
+    this.headerTrailing,
   });
 
   @override
@@ -339,6 +567,7 @@ class _ChartCard extends StatelessWidget {
                           fontWeight: FontWeight.w600,
                           fontSize: 13)),
                 ),
+                ?headerTrailing,
                 IconButton(
                   icon: const Icon(Icons.ios_share_outlined,
                       color: Colors.white38, size: 18),
@@ -358,6 +587,53 @@ class _ChartCard extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+class _ModeChip extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  const _ModeChip(
+      {required this.label, required this.selected, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+          decoration: BoxDecoration(
+            color: selected
+                ? Colors.cyanAccent.withValues(alpha: 0.2)
+                : Colors.transparent,
+            border: Border.all(
+              color: selected
+                  ? Colors.cyanAccent.withValues(alpha: 0.6)
+                  : Colors.white24,
+            ),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 10,
+              color: selected ? Colors.cyanAccent : Colors.white38,
+              fontWeight:
+                  selected ? FontWeight.w600 : FontWeight.normal,
+            ),
+          ),
+        ),
+      );
+}
+
+/// Maps a raw failure reason name to a short Thai display label.
+String _failureThai(String reason) {
+  try {
+    final failure =
+        LivenessFailure.values.firstWhere((f) => f.name == reason);
+    return failure.thaiMessage;
+  } catch (_) {
+    return reason;
   }
 }
 

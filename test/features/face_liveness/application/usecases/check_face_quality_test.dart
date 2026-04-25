@@ -1,4 +1,5 @@
 import 'package:face_liveness_demo/features/face_liveness/application/usecases/check_face_quality.dart';
+import 'package:face_liveness_demo/features/face_liveness/application/usecases/pre_capture_checks.dart';
 import 'package:face_liveness_demo/features/face_liveness/domain/entities/frame_metadata.dart';
 import 'package:face_liveness_demo/features/face_liveness/domain/failures/liveness_failure.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -88,6 +89,46 @@ void main() {
         frame: frame,
       );
       expect(result.errOrNull, LivenessFailure.eyesClosed);
+    });
+
+    test('eye landmarks missing → eyesNotVisible', () {
+      final result = usecase(
+        face: buildFaceSnapshot(omitEyeLandmarks: true),
+        ovalGuide: defaultOvalGuide(),
+        frame: frame,
+      );
+      expect(result.errOrNull, LivenessFailure.eyesNotVisible);
+    });
+
+    test('eyes at 0.6 open → eyesClosed (threshold raised to 0.7)', () {
+      final result = usecase(
+        face: buildFaceSnapshot(leftEye: 0.6, rightEye: 0.6),
+        ovalGuide: defaultOvalGuide(),
+        frame: frame,
+      );
+      expect(result.errOrNull, LivenessFailure.eyesClosed);
+    });
+  });
+
+  group('CheckFaceQuality — PreCaptureChecks toggle', () {
+    test('eyesEnabled=false skips landmark check → passes', () {
+      final result = usecase(
+        face: buildFaceSnapshot(omitEyeLandmarks: true),
+        ovalGuide: defaultOvalGuide(),
+        frame: frame,
+        checks: const PreCaptureChecks(eyesEnabled: false),
+      );
+      expect(result.isOk, isTrue);
+    });
+
+    test('eyesEnabled=false skips open check → passes even when closed', () {
+      final result = usecase(
+        face: buildFaceSnapshot(leftEye: 0.0, rightEye: 0.0),
+        ovalGuide: defaultOvalGuide(),
+        frame: frame,
+        checks: const PreCaptureChecks(eyesEnabled: false),
+      );
+      expect(result.isOk, isTrue);
     });
   });
 }

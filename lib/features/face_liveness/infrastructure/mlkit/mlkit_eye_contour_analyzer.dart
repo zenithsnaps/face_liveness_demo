@@ -1,3 +1,4 @@
+import 'dart:io' show Platform;
 import 'dart:typed_data';
 import 'dart:ui' show Size;
 
@@ -40,18 +41,33 @@ class MlKitEyeContourAnalyzer implements EyeContourAnalyzer {
           ? frame.bytes as Uint8List
           : Uint8List.fromList(frame.bytes);
 
-      // ML Kit expects BGRA8888 (R and B swapped relative to our RGBA source).
-      final bgra = _rgbaToBgra(rgba);
-
-      final input = mlkit.InputImage.fromBytes(
-        bytes: bgra,
-        metadata: mlkit.InputImageMetadata(
-          size: Size(w.toDouble(), h.toDouble()),
-          rotation: mlkit.InputImageRotation.rotation0deg,
-          format: mlkit.InputImageFormat.bgra8888,
-          bytesPerRow: w * 4,
-        ),
-      );
+      // Android: InputImage.fromBytes only reliably supports NV21 (YUV 4:2:0).
+      // iOS: BGRA8888 is the native camera format and works via fromBytes.
+      final mlkit.InputImage input;
+      if (Platform.isAndroid) {
+        final nv21 = _rgbaToNv21(rgba, w, h);
+        input = mlkit.InputImage.fromBytes(
+          bytes: nv21,
+          metadata: mlkit.InputImageMetadata(
+            size: Size(w.toDouble(), h.toDouble()),
+            rotation: mlkit.InputImageRotation.rotation0deg,
+            format: mlkit.InputImageFormat.nv21,
+            bytesPerRow: w,
+          ),
+        );
+      } else {
+        // iOS: convert RGBA → BGRA before passing as bgra8888.
+        final bgra = _rgbaToBgra(rgba);
+        input = mlkit.InputImage.fromBytes(
+          bytes: bgra,
+          metadata: mlkit.InputImageMetadata(
+            size: Size(w.toDouble(), h.toDouble()),
+            rotation: mlkit.InputImageRotation.rotation0deg,
+            format: mlkit.InputImageFormat.bgra8888,
+            bytesPerRow: w * 4,
+          ),
+        );
+      }
 
       final faces = await _detector.processImage(input);
       if (faces.isEmpty) return const Ok(null);
@@ -68,7 +84,7 @@ class MlKitEyeContourAnalyzer implements EyeContourAnalyzer {
     }
   }
 
-  /// In-place RGBA→BGRA channel swap (swap R at i+0 with B at i+2 per pixel).
+  /// RGBA→BGRA channel swap (swap R↔B per pixel).
   Uint8List _rgbaToBgra(Uint8List rgba) {
     final bgra = Uint8List.fromList(rgba);
     for (var i = 0; i < bgra.length - 3; i += 4) {
@@ -77,6 +93,34 @@ class MlKitEyeContourAnalyzer implements EyeContourAnalyzer {
       bgra[i + 2] = r;
     }
     return bgra;
+  }
+
+  /// RGBA→NV21 (YCrCb 4:2:0) conversion for Android InputImage.
+  ///
+  /// NV21 layout: Y plane (w×h bytes) followed by interleaved Cr,Cb plane
+  /// at half resolution ((w/2)×(h/2) pairs). Uses BT.601 integer coefficients.
+  Uint8List _rgbaToNv21(Uint8List rgba, int w, int h) {
+    final nv21 = Uint8List(w * h + ((w + 1) ~/ 2) * ((h + 1) ~/ 2) * 2);
+    var yIdx = 0;
+    var uvIdx = w * h;
+
+    for (var row = 0; row < h; row++) {
+      for (var col = 0; col < w; col++) {
+        final p = (row * w + col) * 4;
+        final r = rgba[p];
+        final g = rgba[p + 1];
+        final b = rgba[p + 2];
+
+        nv21[yIdx++] = ((66 * r + 129 * g + 25 * b + 128) >> 8) + 16;
+
+        if (row.isEven && col.isEven) {
+          // NV21: Cr (V) before Cb (U)
+          nv21[uvIdx++] = ((112 * r - 94 * g - 18 * b + 128) >> 8) + 128;
+          nv21[uvIdx++] = ((-38 * r - 74 * g + 112 * b + 128) >> 8) + 128;
+        }
+      }
+    }
+    return nv21;
   }
 
   EyeRegions _map(mlkit.Face face) {

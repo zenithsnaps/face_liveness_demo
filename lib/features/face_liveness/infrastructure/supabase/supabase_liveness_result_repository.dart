@@ -1,5 +1,4 @@
-import 'dart:typed_data';
-
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../application/usecases/post_capture_checks.dart';
@@ -51,7 +50,9 @@ class SupabaseLivenessResultRepository implements LivenessResultRepository {
         summaryUrl = _client.storage
             .from('liveness-summaries')
             .getPublicUrl(summaryObjectPath);
-      } on StorageException {
+        debugPrint('[Persist] storage upload ok — $summaryObjectPath');
+      } catch (e, st) {
+        debugPrint('[Persist] storage upload FAILED (${e.runtimeType}): $e\n$st');
         // Upload failed — row will be inserted with summary_path = null
         summaryObjectPath = null;
       }
@@ -88,9 +89,14 @@ class SupabaseLivenessResultRepository implements LivenessResultRepository {
           'camera_resolution': device.cameraResolution,
       };
 
+      debugPrint('[Persist] inserting row id=$attemptId passed=$passed '
+          'failure=${failure?.name} summaryPath=$summaryObjectPath '
+          'occlusionCheckNull=${captureValidation == null}');
       await _client.from('liveness_attempts').insert(row);
+      debugPrint('[Persist] DB insert ok — $attemptId');
       return attemptId;
-    } on PostgrestException {
+    } catch (e, st) {
+      debugPrint('[Persist] DB insert FAILED (${e.runtimeType}): $e\n$st');
       // Clean up orphan blob best-effort
       if (summaryObjectPath != null) {
         await _client.storage
@@ -104,6 +110,7 @@ class SupabaseLivenessResultRepository implements LivenessResultRepository {
   @override
   Future<List<AttemptRecord>> fetchAttempts({
     DateTime? since,
+    DateTime? until,
     int limit = 1000,
   }) async {
     var query = _client.from('liveness_attempts').select(
@@ -112,6 +119,9 @@ class SupabaseLivenessResultRepository implements LivenessResultRepository {
         );
     if (since != null) {
       query = query.gte('completed_at', since.toIso8601String());
+    }
+    if (until != null) {
+      query = query.lte('completed_at', until.toIso8601String());
     }
     final rows = await query
         .order('completed_at', ascending: false)
@@ -137,6 +147,7 @@ class SupabaseLivenessResultRepository implements LivenessResultRepository {
       CaptureValidationResult v, PostCaptureThresholds t, PostCaptureChecks c) {
     final resultLabel = v.failure == null ? 'passed' : v.failure!.name;
     final meta = v.frameMeta;
+    final eye = v.eyeEvidence;
     return {
       'ran': true,
       'result': resultLabel,
@@ -160,6 +171,27 @@ class SupabaseLivenessResultRepository implements LivenessResultRepository {
                   'confidence': h.confidence.value,
                 })
             .toList(),
+      },
+      'eye_occlusion': {
+        'enabled': c.eyeOcclusionEnabled,
+        'evaluated': eye != null,
+        if (eye != null) ...{
+          'occluded': eye.occluded,
+          'combined_score': eye.combinedScore,
+          'reference_luminance': eye.referenceLuminance,
+          'left': {
+            'lum_ratio': eye.leftLumRatio,
+            'std_dev': eye.leftStdDev,
+            'saturation': eye.leftSaturation,
+            'score': eye.leftScore,
+          },
+          'right': {
+            'lum_ratio': eye.rightLumRatio,
+            'std_dev': eye.rightStdDev,
+            'saturation': eye.rightSaturation,
+            'score': eye.rightScore,
+          },
+        },
       },
       if (meta != null)
         'frame': {

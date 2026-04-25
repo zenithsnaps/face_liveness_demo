@@ -5,8 +5,10 @@ import '../../../../core/app_strings.dart';
 import '../providers/post_capture_checks_provider.dart';
 import '../providers/post_capture_thresholds_provider.dart';
 import '../providers/pre_capture_checks_provider.dart';
+import '../providers/liveness_providers.dart';
 import '../providers/test_cases_provider.dart';
 import '../providers/tester_provider.dart';
+import 'analytics_screen.dart';
 import 'face_liveness_screen.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
@@ -45,8 +47,26 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final testCases = ref.watch(testCasesListProvider);
     final selectedCase = ref.watch(selectedTestCaseProvider);
 
+    final supabaseEnabled = ref.read(livenessResultRepositoryProvider) != null;
+
     return Scaffold(
       appBar: AppBar(title: const Text(AppStrings.appTitle)),
+      bottomNavigationBar: supabaseEnabled
+          ? SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(24, 8, 24, 12),
+                child: OutlinedButton.icon(
+                  icon: const Icon(Icons.analytics_outlined),
+                  label: const Text('ดูภาพรวม'),
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const AnalyticsScreen(),
+                    ),
+                  ),
+                ),
+              ),
+            )
+          : null,
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
         child: Column(

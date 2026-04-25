@@ -6,6 +6,7 @@ import '../../domain/entities/face_snapshot.dart';
 import '../../domain/entities/frame_metadata.dart';
 import '../../domain/failures/liveness_failure.dart';
 import '../../domain/value_objects/rect2d.dart';
+import 'pre_capture_checks.dart';
 
 /// Gate 2 — face fills the oval guide, head is roughly straight, eyes open.
 ///
@@ -18,6 +19,7 @@ class CheckFaceQuality {
     required FaceSnapshot? face,
     required Rect2D ovalGuide,
     required FrameMetadata frame,
+    PreCaptureChecks checks = PreCaptureChecks.defaults,
   }) {
     if (face == null) {
       return const Err(LivenessFailure.noFace);
@@ -51,14 +53,21 @@ class CheckFaceQuality {
       return const Err(LivenessFailure.headPoseOff);
     }
 
-    // Both eyes reasonably open (so we don't accidentally treat a blink as
-    // "not looking"). Use a mild threshold — blink detection is Gate 1b.
-    final minEyeOpen = math.min(
-      face.leftEyeOpenProbability.value,
-      face.rightEyeOpenProbability.value,
-    );
-    if (minEyeOpen < 0.5) {
-      return const Err(LivenessFailure.eyesClosed);
+    if (checks.eyesEnabled) {
+      // Both eye landmarks must be detected (eyes not covered / occluded).
+      if (face.landmarks[FaceLandmarkType.leftEye] == null ||
+          face.landmarks[FaceLandmarkType.rightEye] == null) {
+        return const Err(LivenessFailure.eyesNotVisible);
+      }
+
+      // Both eyes open — threshold aligned with blink's "open" threshold.
+      final minEyeOpen = math.min(
+        face.leftEyeOpenProbability.value,
+        face.rightEyeOpenProbability.value,
+      );
+      if (minEyeOpen < AppConstants.faceQualityEyeOpenMinThreshold) {
+        return const Err(LivenessFailure.eyesClosed);
+      }
     }
 
     return const Ok(null);

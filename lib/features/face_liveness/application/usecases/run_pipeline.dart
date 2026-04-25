@@ -11,6 +11,7 @@ import '../../domain/value_objects/rect2d.dart';
 import 'check_face_quality.dart';
 import 'check_liveness_blink.dart';
 import 'check_liveness_smile.dart';
+import 'pre_capture_checks.dart';
 
 /// Result of evaluating the gate that the flow machine currently cares about
 /// against a single analyzed frame.
@@ -66,7 +67,11 @@ class RunPipeline {
     _blink.reset();
   }
 
-  PipelineFrameOutcome evaluate(LivenessGate gate, PipelineFrameInput input) {
+  PipelineFrameOutcome evaluate(
+    LivenessGate gate,
+    PipelineFrameInput input, {
+    PreCaptureChecks checks = PreCaptureChecks.defaults,
+  }) {
     final face = input.face;
 
     // Every gate past faceQuality needs a face to work with; if none, short-circuit.
@@ -84,6 +89,7 @@ class RunPipeline {
             face: face,
             ovalGuide: input.ovalGuide,
             frame: input.frame,
+            checks: checks,
           ),
         ),
       LivenessGate.livenessSmile => PipelineFrameOutcome(

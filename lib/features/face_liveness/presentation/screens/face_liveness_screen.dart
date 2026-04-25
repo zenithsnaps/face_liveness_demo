@@ -327,6 +327,10 @@ class _FaceLivenessScreenState extends ConsumerState<FaceLivenessScreen>
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     FilledButton(
+                      style: FilledButton.styleFrom(
+                        backgroundColor: Colors.white,
+                        foregroundColor: Colors.black87,
+                      ),
                       onPressed: () {
                         ref.read(flowControllerProvider.notifier).dispatch(const UserRetry());
                         _gateTimeout?.cancel();

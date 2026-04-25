@@ -83,21 +83,32 @@ class _ResultScreenState extends ConsumerState<ResultScreen> {
     }
 
     final completedAt = DateTime.now().toUtc();
-    final id = await repo.persistAttempt(
-      draft: draft,
-      completedAt: completedAt,
-      passed: widget.validation.passed,
-      failure: widget.validation.failure,
-      failureMessage: widget.validation.failure?.thaiMessage,
-      faceScore: widget.validation.faceScore,
-      thresholds: widget.thresholds,
-      checks: widget.checks,
-      captureValidation: widget.validation,
-      summaryPng: png,
-      device: device,
-      testCase: widget.testCase,
-      testerName: widget.tester,
-    );
+    String? id;
+    try {
+      id = await repo.persistAttempt(
+        draft: draft,
+        completedAt: completedAt,
+        passed: widget.validation.passed,
+        failure: widget.validation.failure,
+        failureMessage: widget.validation.failure?.thaiMessage,
+        faceScore: widget.validation.faceScore,
+        thresholds: widget.thresholds,
+        checks: widget.checks,
+        captureValidation: widget.validation,
+        summaryPng: png,
+        device: device,
+        testCase: widget.testCase,
+        testerName: widget.tester,
+      );
+    } catch (e, st) {
+      debugPrint('[ResultScreen] persistAttempt threw (${e.runtimeType}): $e\n$st');
+      if (!mounted) return;
+      setState(() {
+        _persisting = false;
+        _persistFailed = true;
+      });
+      return;
+    }
 
     if (!mounted) return;
     setState(() {
@@ -154,14 +165,16 @@ class _ResultScreenState extends ConsumerState<ResultScreen> {
                       ),
                       const SizedBox(height: 16),
                       _ValidationCard(validation: widget.validation),
+                      if (widget.validation.eyeEvidence != null) ...[
+                        const SizedBox(height: 8),
+                        _EyeEvidenceChip(
+                            evidence: widget.validation.eyeEvidence!),
+                      ],
                     ],
                   ),
                 ),
               ),
             ),
-            const SizedBox(height: 8),
-            if (widget.validation.eyeEvidence != null)
-              _EyeEvidenceChip(evidence: widget.validation.eyeEvidence!),
             const SizedBox(height: 8),
 
             // Cloud sync section (outside RepaintBoundary — not part of snapshot)
