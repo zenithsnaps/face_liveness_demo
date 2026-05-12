@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:math' as math;
 
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
@@ -11,17 +10,15 @@ import '../../application/flow/liveness_flow_event.dart';
 import '../../application/flow/liveness_flow_state.dart';
 import '../../application/usecases/run_pipeline.dart';
 import '../../domain/entities/face_snapshot.dart';
-import '../../domain/entities/frame_data.dart';
 import '../../domain/entities/liveness_gate.dart';
 import '../../domain/failures/liveness_failure.dart';
 import '../../domain/value_objects/rect2d.dart';
 import '../../infrastructure/camera/camera_frame_source.dart';
-import '../../infrastructure/image/jpeg_frame_decoder.dart';
 import '../../infrastructure/mlkit/mlkit_face_analyzer.dart';
+import '../coordinators/batch_capture_coordinator.dart';
+import '../providers/capture_frame_count_provider.dart';
 import '../providers/face_score_samples_provider.dart';
 import '../providers/liveness_providers.dart';
-import '../providers/post_capture_checks_provider.dart';
-import '../providers/post_capture_thresholds_provider.dart';
 import '../providers/pre_capture_checks_provider.dart';
 import '../providers/test_cases_provider.dart';
 import '../providers/tester_provider.dart';
@@ -84,6 +81,7 @@ class _FaceLivenessScreenState extends ConsumerState<FaceLivenessScreen>
     controller.dispatch(const StartRequested());
     ref.read(attemptDraftProvider.notifier).startNew();
     ref.read(faceScoreSamplesProvider.notifier).clear();
+    ref.read(batchCaptureCoordinatorProvider).reset();
     final camera = ref.read(cameraSourceProvider);
     try {
       // Initialize camera + MediaPipe (face detector + hand landmarker loaded).
@@ -128,26 +126,11 @@ class _FaceLivenessScreenState extends ConsumerState<FaceLivenessScreen>
       faceAnalyzer.setPendingInputImage(inputImage);
     }
 
-    // Run ML Kit (gates) and MediaPipe face detection (live score chart) in parallel.
-    final mediapipeFaceAnalyzer = ref.read(faceDetectionAnalyzerProvider);
-    final faceFuture = faceAnalyzer.analyze(frame);
-    final mediapipeFaceFuture = mediapipeFaceAnalyzer.analyze(frame);
-
+    // Stage A — ML Kit geometry gate (prerequisite). Frames that fail this
+    // never enter the score batch.
+    final faceResult = await faceAnalyzer.analyze(frame);
     FaceSnapshot? face;
-    final faceResult = await faceFuture;
     faceResult.fold((value) => face = value, (_) {});
-
-    final mediapipeFaceResult = await mediapipeFaceFuture;
-    double? bestMediapipeScore;
-    mediapipeFaceResult.fold((faces) {
-      if (faces.isNotEmpty) {
-        bestMediapipeScore =
-            faces.map((f) => f.score.value).reduce(math.max);
-      }
-    }, (_) {});
-
-    if (!mounted) return;
-    ref.read(faceScoreSamplesProvider.notifier).add(bestMediapipeScore);
 
     final ovalGuide = _ovalGuideInFrameSpace(
         image.width, image.height, frame.metadata.rotationDegrees);
@@ -167,15 +150,77 @@ class _FaceLivenessScreenState extends ConsumerState<FaceLivenessScreen>
     final controller = ref.read(flowControllerProvider.notifier);
     controller.dispatch(FrameAnalyzed(outcome));
 
-    // On gate change, re-arm timeout.
-    final nextFlow = ref.read(flowControllerProvider);
-    if (nextFlow is FlowEvaluating && nextFlow.gate != flow.gate) {
-      _armGateTimeout();
+    final coordinator = ref.read(batchCaptureCoordinatorProvider);
+    if (!outcome.didPass) {
+      // Geometry failed → drop the in-progress batch; the user moved or the
+      // face quality dropped, so previously buffered scores are stale.
+      coordinator.reset();
+      return;
     }
-    if (nextFlow is FlowCapturing) {
+
+    // Stage B — score the frame on 3 analyzers in parallel.
+    // Pass ML Kit's face bbox into the analyzer because it is tighter than
+    // MediaPipe BlazeFace's box (which often includes the forehead/hair) and
+    // matches the eye-occlusion ROI percentages tuned in production.
+    final analyzer = ref.read(scoreFrameAnalyzerProvider);
+    final thresholds = ref.read(preCaptureScoreThresholdsProvider);
+    final scored = await analyzer.analyze(
+      frame,
+      thresholds,
+      mlKitFaceBox: face?.boundingBox,
+    );
+    if (!mounted) return;
+    if (scored == null) return;            // analyzer error → skip frame
+
+    // Mirror the face score into the live chart (kept for tuning UI).
+    ref.read(faceScoreSamplesProvider.notifier).add(scored.faceScore);
+
+    // Stage C — admit into the session (encodes JPEG inline). The session
+    // fills up over time as the geometry gate keeps passing; once full, we
+    // navigate to the result screen.
+    final targetSize = ref.read(captureFrameCountProvider);
+    final batchOutcome = await coordinator.admit(scored, targetSize);
+    if (!mounted) return;
+
+    if (batchOutcome is BatchAdmitInProgress) return;
+    if (batchOutcome is BatchSessionComplete) {
+      controller.dispatch(const BatchCaptureStarted());
       _gateTimeout?.cancel();
-      unawaited(_capture());
+      _navigateToResult(batchOutcome.session);
     }
+  }
+
+  void _navigateToResult(CaptureSession session) {
+    final controller = ref.read(flowControllerProvider.notifier);
+    final faceMax = session.faceMaxFrame;
+    controller.dispatch(
+      CaptureComplete(faceMax.jpegPath, faceScore: faceMax.score.faceScore),
+    );
+    if (!mounted) return;
+
+    final testCase = ref.read(selectedTestCaseProvider);
+    final tester = ref.read(testerNameProvider).valueOrNull;
+    // Snapshot the camera resolution before the camera is disposed during
+    // navigation — ResultScreen needs it to populate the camera_resolution
+    // column on each row.
+    final previewSize =
+        ref.read(cameraSourceProvider).controller?.value.previewSize;
+    final cameraResolution = previewSize == null
+        ? null
+        : '${previewSize.width.round()}x${previewSize.height.round()}';
+    Navigator.of(context).pushReplacement(
+      PageRouteBuilder(
+        transitionDuration: const Duration(milliseconds: 200),
+        pageBuilder: (_, _, _) => ResultScreen(
+          session: session,
+          testCase: testCase,
+          tester: tester,
+          cameraResolution: cameraResolution,
+        ),
+        transitionsBuilder: (_, anim, _, child) =>
+            FadeTransition(opacity: anim, child: child),
+      ),
+    );
   }
 
   /// Build a Rect2D in the camera frame's coordinate space that corresponds
@@ -205,66 +250,11 @@ class _FaceLivenessScreenState extends ConsumerState<FaceLivenessScreen>
     });
   }
 
-  Future<void> _capture() async {
-    final camera = ref.read(cameraSourceProvider);
-    final path = await camera.takePicture();
-    if (!mounted) return;
-    final controller = ref.read(flowControllerProvider.notifier);
-    if (path == null) {
-      controller.dispatch(const CaptureFailed(LivenessFailure.cameraError));
-      return;
-    }
-
-    // Silent post-capture validation: face score ≥ 95% AND zero hands in frame.
-    final FrameData frame;
-    try {
-      frame = await JpegFrameDecoder.decode(path);
-    } catch (_) {
-      controller.dispatch(const CaptureFailed(LivenessFailure.cameraError));
-      return;
-    }
-    if (!mounted) return;
-
-    final thresholds = ref.read(postCaptureThresholdsProvider);
-    final checks = ref.read(postCaptureChecksProvider);
-    final testCase = ref.read(selectedTestCaseProvider);
-    final tester = ref.read(testerNameProvider).valueOrNull;
-    final result = await ref.read(validateCaptureProvider).call(
-          frame,
-          thresholds: thresholds,
-          checks: checks,
-        );
-    if (!mounted) return;
-
-    if (result.passed) {
-      controller.dispatch(CaptureComplete(path, faceScore: result.faceScore));
-    } else {
-      controller.dispatch(CaptureFailed(result.failure!));
-    }
-    if (!mounted) return;
-    Navigator.of(context).pushReplacement(
-      PageRouteBuilder(
-        transitionDuration: const Duration(milliseconds: 200),
-        pageBuilder: (_, _, _) => ResultScreen(
-          photoPath: path,
-          validation: result,
-          thresholds: thresholds,
-          checks: checks,
-          testCase: testCase,
-          tester: tester,
-        ),
-        transitionsBuilder: (_, anim, _, child) =>
-            FadeTransition(opacity: anim, child: child),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final flow = ref.watch(flowControllerProvider);
     final camera = ref.watch(cameraSourceProvider);
     final faceScoreSamples = ref.watch(faceScoreSamplesProvider);
-    final thresholds = ref.watch(postCaptureThresholdsProvider);
     final showChart = _initialized && flow is! FlowFailed;
 
     return Scaffold(
@@ -309,7 +299,7 @@ class _FaceLivenessScreenState extends ConsumerState<FaceLivenessScreen>
                 right: 16,
                 child: FaceScoreChart(
                   samples: faceScoreSamples,
-                  threshold: thresholds.faceScore,
+                  threshold: AppConstants.faceDetectionMinScore,
                 ),
               ),
             Positioned(

@@ -86,6 +86,23 @@ object MediaPipePlugin {
                         val landmarkResult = bridge.detect(frame)
                         postResult(result, landmarkResult)
                     }
+                    "encodeFrameToJpeg" -> {
+                        val args = call.arguments as? Map<*, *>
+                            ?: return@execute postError(result, "BAD_ARGS", "expected Map")
+                        val frame = FrameArgs.fromMap(args)
+                        val quality = (args["quality"] as? Number)?.toInt() ?: 90
+                        val outPath = args["outPath"] as? String
+                            ?: return@execute postError(result, "BAD_ARGS", "missing outPath")
+                        val path = JpegEncoderBridge.encode(frame, quality, outPath)
+                        postResult(result, path)
+                    }
+                    "decodeUprightRgba" -> {
+                        val args = call.arguments as? Map<*, *>
+                            ?: return@execute postError(result, "BAD_ARGS", "expected Map")
+                        val frame = FrameArgs.fromMap(args)
+                        val decoded = UprightRgbaBridge.decode(frame)
+                        postResult(result, decoded?.let { UprightRgbaBridge.toMap(it) })
+                    }
                     "dispose" -> {
                         handBridge?.close()
                         objectBridge?.close()

@@ -55,3 +55,10 @@ final class CaptureFailed extends LivenessFlowEvent {
   final LivenessFailure reason;
   const CaptureFailed(this.reason);
 }
+
+/// The X-frame capture session reached the configured target count. The
+/// screen is now encoding the JPEGs / navigating to the result screen. UI
+/// transitions to FlowCapturing to hide the preview during the hand-off.
+final class BatchCaptureStarted extends LivenessFlowEvent {
+  const BatchCaptureStarted();
+}

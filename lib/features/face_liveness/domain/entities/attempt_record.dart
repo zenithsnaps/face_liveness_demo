@@ -11,6 +11,9 @@ class AttemptRecord {
   final String? testCase;
   final bool? faceCheckEnabled;
   final bool? handCheckEnabled;
+  final String? deviceModel;
+  final String? summaryUrl;
+  final String? testerName;
 
   const AttemptRecord({
     required this.id,
@@ -22,5 +25,14 @@ class AttemptRecord {
     this.testCase,
     this.faceCheckEnabled,
     this.handCheckEnabled,
+    this.deviceModel,
+    this.summaryUrl,
+    this.testerName,
   });
+
+  /// Coarse platform inferred from [deviceModel].
+  /// Anything containing "iphone" (case-insensitive) is iOS;
+  /// everything else (including null) is treated as Android.
+  bool get isIos =>
+      (deviceModel ?? '').toLowerCase().contains('iphone');
 }

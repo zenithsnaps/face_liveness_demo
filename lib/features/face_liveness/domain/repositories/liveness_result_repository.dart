@@ -1,13 +1,8 @@
-import 'dart:typed_data';
-
 import 'package:meta/meta.dart';
 
 import '../../application/usecases/post_capture_checks.dart';
-import '../../application/usecases/post_capture_thresholds.dart';
-import '../../application/usecases/validate_capture.dart';
-import '../../domain/entities/attempt_draft.dart';
 import '../../domain/entities/attempt_record.dart';
-import '../../domain/failures/liveness_failure.dart';
+import '../../presentation/coordinators/batch_capture_coordinator.dart';
 
 @immutable
 class DeviceContext {
@@ -32,20 +27,18 @@ class DeviceContext {
 }
 
 abstract class LivenessResultRepository {
-  /// Upload summary PNG (if provided) then insert a row in liveness_attempts.
-  /// Returns the attempt id on success, null if persistence failed.
-  Future<String?> persistAttempt({
-    required AttemptDraft draft,
+  /// Upload every captured frame in [session] as a separate row in
+  /// `liveness_attempts`, sharing the same `group_id` and ordered by
+  /// `sequence`. Each row carries its own JPEG (uploaded to storage) plus the
+  /// per-frame face/hand/eye metrics for downstream review.
+  ///
+  /// Returns the group id on success, null if persistence failed.
+  Future<String?> persistSession({
+    required CaptureSession session,
+    required DateTime draftStartedAt,
     required DateTime completedAt,
-    required bool passed,
-    required LivenessFailure? failure,
-    required String? failureMessage,
-    required double? faceScore,
-    required PostCaptureThresholds thresholds,
-    required PostCaptureChecks checks,
-    required CaptureValidationResult? captureValidation,
-    required Uint8List? summaryPng,
     required DeviceContext device,
+    required PostCaptureChecks checks,
     required String? testCase,
     required String? testerName,
   });

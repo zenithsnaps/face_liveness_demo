@@ -8,18 +8,25 @@ import '../../domain/failures/liveness_failure.dart';
 import '../providers/analytics_provider.dart';
 import '../providers/test_cases_provider.dart';
 import '../utils/share_png.dart';
+import '../widgets/analytics/bell_curve_chart.dart';
 import '../widgets/analytics/box_plot_per_case_chart.dart';
 import '../widgets/analytics/confusion_matrix_card.dart';
 import '../widgets/analytics/far_frr_curve_chart.dart';
-import '../widgets/analytics/histogram_chart.dart';
 import '../widgets/analytics/label_split_histogram_chart.dart';
 import '../widgets/analytics/pass_rate_curve_chart.dart';
+import '../widgets/analytics/chart_help.dart';
 import '../widgets/analytics/test_case_label_editor.dart';
+import 'failing_attempts_screen.dart';
 
 final _dtFmt = DateFormat('d MMM yy HH:mm');
 
 class AnalyticsScreen extends ConsumerStatefulWidget {
-  const AnalyticsScreen({super.key});
+  /// face_score (0–1) of the attempt that opened this screen, used to draw a
+  /// "เคสนี้" marker on the bell curve. Null when opened without a context
+  /// attempt (e.g. from a top-level menu).
+  final double? currentScore;
+
+  const AnalyticsScreen({super.key, this.currentScore});
 
   @override
   ConsumerState<AnalyticsScreen> createState() => _AnalyticsScreenState();
@@ -242,6 +249,22 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
                               ),
                             ),
                           ],
+                          const SizedBox(height: 8),
+                          Wrap(
+                            spacing: 6,
+                            runSpacing: 4,
+                            children: DeviceFilter.values.map((d) {
+                              final selected = filters.device == d;
+                              return ChoiceChip(
+                                label: Text(d.label,
+                                    style: const TextStyle(fontSize: 11)),
+                                selected: selected,
+                                onSelected: (_) => ref
+                                    .read(analyticsFiltersProvider.notifier)
+                                    .setDevice(d),
+                              );
+                            }).toList(),
+                          ),
                           if (allCases.isNotEmpty) ...[
                             const SizedBox(height: 8),
                             Wrap(
@@ -389,10 +412,29 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
                               sorted.isEmpty
                                   ? '—'
                                   : '${(med * 100).toStringAsFixed(1)}%'),
-                          _KpiTile('pass',
-                              scores.isEmpty
-                                  ? '—'
-                                  : '${passRate.toStringAsFixed(1)}%'),
+                          _KpiTile(
+                            'pass',
+                            scores.isEmpty
+                                ? '—'
+                                : '${passRate.toStringAsFixed(1)}%',
+                            trailing: scores.any((s) => s < threshold)
+                                ? IconButton(
+                                    icon: const Icon(Icons.list_alt,
+                                        color: Colors.cyanAccent, size: 18),
+                                    tooltip: 'ดูเคสที่ไม่ผ่าน',
+                                    padding: EdgeInsets.zero,
+                                    constraints: const BoxConstraints(),
+                                    visualDensity: VisualDensity.compact,
+                                    onPressed: () =>
+                                        Navigator.of(context).push(
+                                      MaterialPageRoute(
+                                        builder: (_) =>
+                                            const FailingAttemptsScreen(),
+                                      ),
+                                    ),
+                                  )
+                                : null,
+                          ),
                         ],
                       ),
                     ),
@@ -403,16 +445,18 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
                       repaintKey: _passRateKey,
                       title: 'Pass-rate vs Threshold',
                       shareFilename: 'pass_rate_curve.png',
+                      helpId: ChartId.passRate,
                       child: PassRateCurveChart(
                           scores: scores, threshold: threshold),
                     ),
                     const SizedBox(height: 12),
 
-                    // ── Histogram ────────────────────────────────────────
+                    // ── Bell curve (Gaussian fit) ────────────────────────
                     _ChartCard(
                       repaintKey: _histKey,
-                      title: 'Histogram (face_score distribution)',
-                      shareFilename: 'histogram.png',
+                      title: 'Bell curve (face_score distribution)',
+                      shareFilename: 'bell_curve.png',
+                      helpId: ChartId.bellCurve,
                       headerTrailing: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
@@ -433,11 +477,12 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
                           ),
                         ],
                       ),
-                      child: HistogramChart(
+                      child: BellCurveChart(
                         scores: scores,
                         threshold: threshold,
                         mean: mean,
                         median: med,
+                        currentScore: widget.currentScore,
                         yMode: histYMode,
                       ),
                     ),
@@ -448,6 +493,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
                       repaintKey: _labelHistKey,
                       title: 'Histogram Live vs Spoof (density)',
                       shareFilename: 'label_split_histogram.png',
+                      helpId: ChartId.labelSplit,
                       child: LabelSplitHistogramChart(
                         scoresByLabel: scoresByLabel,
                         threshold: threshold,
@@ -460,6 +506,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
                       repaintKey: _farFrrKey,
                       title: 'FAR / FRR curve + EER',
                       shareFilename: 'far_frr_curve.png',
+                      helpId: ChartId.farFrr,
                       child: FarFrrCurveChart(
                         liveScores: liveScores,
                         spoofScores: spoofScores,
@@ -473,6 +520,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
                       repaintKey: _boxKey,
                       title: 'Box plot ต่อเคสทดสอบ',
                       shareFilename: 'box_plot.png',
+                      helpId: ChartId.boxPlot,
                       child: BoxPlotPerCaseChart(
                           groups: groups, threshold: threshold),
                     ),
@@ -483,6 +531,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
                       repaintKey: _confKey,
                       title: 'Confusion matrix + KPI ต่อเคส',
                       shareFilename: 'confusion_matrix.png',
+                      helpId: ChartId.confusion,
                       child: ConfusionMatrixCard(
                         attempts: attempts,
                         labels: labels,
@@ -540,6 +589,7 @@ class _ChartCard extends StatelessWidget {
   final String shareFilename;
   final Widget child;
   final Widget? headerTrailing;
+  final ChartId? helpId;
 
   const _ChartCard({
     required this.repaintKey,
@@ -547,6 +597,7 @@ class _ChartCard extends StatelessWidget {
     required this.shareFilename,
     required this.child,
     this.headerTrailing,
+    this.helpId,
   });
 
   @override
@@ -567,6 +618,13 @@ class _ChartCard extends StatelessWidget {
                           fontWeight: FontWeight.w600,
                           fontSize: 13)),
                 ),
+                if (helpId != null)
+                  IconButton(
+                    icon: const Icon(Icons.info_outline,
+                        color: Colors.white38, size: 18),
+                    tooltip: 'อธิบายกราฟ',
+                    onPressed: () => showChartHelp(context, helpId!),
+                  ),
                 ?headerTrailing,
                 IconButton(
                   icon: const Icon(Icons.ios_share_outlined,
@@ -640,17 +698,29 @@ String _failureThai(String reason) {
 class _KpiTile extends StatelessWidget {
   final String label;
   final String value;
-  const _KpiTile(this.label, this.value);
+  final Widget? trailing;
+
+  const _KpiTile(this.label, this.value, {this.trailing});
 
   @override
   Widget build(BuildContext context) => Expanded(
         child: Column(
           children: [
-            Text(value,
-                style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold)),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(value,
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold)),
+                if (trailing != null) ...[
+                  const SizedBox(width: 4),
+                  trailing!,
+                ],
+              ],
+            ),
             Text(label,
                 style:
                     const TextStyle(color: Colors.white54, fontSize: 11)),

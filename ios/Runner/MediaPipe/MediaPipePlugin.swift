@@ -77,6 +77,27 @@ enum MediaPipePlugin {
                 if faceLandmarkerBridge == nil { faceLandmarkerBridge = try FaceLandmarkerBridge() }
                 let landmarkResult = try faceLandmarkerBridge!.detect(frame: frame)
                 DispatchQueue.main.async { result(landmarkResult) }
+            case "encodeFrameToJpeg":
+                guard let map = call.arguments as? [String: Any],
+                      let frame = FrameArgs.fromAny(call.arguments),
+                      let outPath = map["outPath"] as? String else {
+                    DispatchQueue.main.async {
+                        result(FlutterError(code: "BAD_ARGS", message: "expected Map with outPath", details: nil))
+                    }
+                    return
+                }
+                let quality = (map["quality"] as? Int) ?? 90
+                let path = JpegEncoderBridge.encode(frame: frame, quality: quality, outPath: outPath)
+                DispatchQueue.main.async { result(path) }
+            case "decodeUprightRgba":
+                guard let frame = FrameArgs.fromAny(call.arguments) else {
+                    DispatchQueue.main.async {
+                        result(FlutterError(code: "BAD_ARGS", message: "expected Map", details: nil))
+                    }
+                    return
+                }
+                let decoded = UprightRgbaBridge.decode(frame: frame)
+                DispatchQueue.main.async { result(decoded) }
             case "dispose":
                 handBridge = nil
                 objectBridge = nil

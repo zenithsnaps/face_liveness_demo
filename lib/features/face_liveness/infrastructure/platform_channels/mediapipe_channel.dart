@@ -67,6 +67,34 @@ class MediaPipeChannel {
     return raw ?? const {};
   }
 
+  /// Decodes [frame] into upright RGBA8888 + dimensions via native.
+  ///
+  /// Returns `{bytes: Uint8List, width: int, height: int}` on success, or null
+  /// when the underlying decode fails (unsupported format, corrupt bytes).
+  Future<Map<String, Object?>?> decodeUprightRgba(FrameData frame) async {
+    final raw = await _channel.invokeMapMethod<String, Object?>(
+      'decodeUprightRgba',
+      _encodeFrame(frame),
+    );
+    if (raw == null) return null;
+    return raw;
+  }
+
+  /// Encodes [frame] as an upright JPEG written to [outPath] at [quality]
+  /// (1–100). Returns the path on success, or null on failure.
+  Future<String?> encodeFrameToJpeg(
+    FrameData frame, {
+    required String outPath,
+    int quality = 90,
+  }) async {
+    final args = {
+      ..._encodeFrame(frame),
+      'outPath': outPath,
+      'quality': quality,
+    };
+    return _channel.invokeMethod<String>('encodeFrameToJpeg', args);
+  }
+
   Future<void> dispose() async {
     if (!_initialized) return;
     _initialized = false;

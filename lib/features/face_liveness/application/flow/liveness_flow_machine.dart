@@ -1,4 +1,3 @@
-import '../../../../core/app_constants.dart';
 import '../../domain/entities/liveness_gate.dart';
 import '../../domain/failures/liveness_failure.dart';
 import 'liveness_flow_event.dart';
@@ -33,6 +32,10 @@ class LivenessFlowMachine {
       (FlowEvaluating current, FrameAnalyzed e) =>
         _reduceFrameAnalyzed(current, e),
 
+      // Evaluating → Capturing once the session has filled and the screen
+      // is encoding the JPEGs (preview hidden, "verifying" banner shown).
+      (FlowEvaluating _, BatchCaptureStarted _) => const FlowCapturing(),
+
       // Evaluating: timeout
       (FlowEvaluating _, TimeoutElapsed _) =>
         const FlowFailed(reason: LivenessFailure.timeout, retryable: true),
@@ -61,12 +64,11 @@ class LivenessFlowMachine {
     }
 
     if (event.outcome.didPass) {
-      final nextCount = current.consecutivePasses + 1;
-      if (nextCount >= AppConstants.debounceFrames) {
-        return _advanceGate(current.gate);
-      }
+      // Counter is now a pure UI hint — the transition to FlowCapturing is
+      // owned by BatchCaptureStarted (dispatched from BatchCaptureCoordinator
+      // once the 5-frame batch evaluates to a winner).
       return current.copyWith(
-        consecutivePasses: nextCount,
+        consecutivePasses: current.consecutivePasses + 1,
         clearLastFailure: true,
       );
     }
@@ -75,18 +77,6 @@ class LivenessFlowMachine {
     return current.copyWith(
       consecutivePasses: 0,
       lastFailure: event.outcome.failure,
-    );
-  }
-
-  LivenessFlowState _advanceGate(LivenessGate current) {
-    final pipeline = LivenessGate.orderedPipeline;
-    final idx = pipeline.indexOf(current);
-    if (idx == -1 || idx == pipeline.length - 1) {
-      return const FlowCapturing();
-    }
-    return FlowEvaluating(
-      gate: pipeline[idx + 1],
-      consecutivePasses: 0,
     );
   }
 }

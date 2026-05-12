@@ -22,7 +22,7 @@ class CheckNoEyeOcclusion {
   }) =>
       EyeOcclusionUtil.detect(
         frame: frame,
-        regions: regions,
+        faceBox: regions.faceBox,
         thresholds: thresholds,
       );
 }

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/app_constants.dart';
 import '../../../../core/app_strings.dart';
+import '../providers/capture_frame_count_provider.dart';
 import '../providers/post_capture_checks_provider.dart';
 import '../providers/post_capture_thresholds_provider.dart';
 import '../providers/pre_capture_checks_provider.dart';
@@ -44,6 +46,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final checksCtrl = ref.read(postCaptureChecksProvider.notifier);
     final preChecks = ref.watch(preCaptureChecksProvider);
     final preChecksCtrl = ref.read(preCaptureChecksProvider.notifier);
+    final captureFrameCount = ref.watch(captureFrameCountProvider);
+    final captureFrameCountCtrl = ref.read(captureFrameCountProvider.notifier);
     final testCases = ref.watch(testCasesListProvider);
     final selectedCase = ref.watch(selectedTestCaseProvider);
 
@@ -178,6 +182,48 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       ),
                       value: preChecks.eyesEnabled,
                       onChanged: preChecksCtrl.setEyesEnabled,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'จำนวนเฟรมที่จับต่อครั้ง',
+                      style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                    ),
+                    const Text(
+                      'ระบบจะเก็บภาพต่อเนื่องตามจำนวนนี้เมื่อหน้าเข้ากรอบ และแสดงทุกภาพในหน้าสรุปผล',
+                      style: TextStyle(fontSize: 11, color: Colors.black54),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('จำนวนภาพ', style: TextStyle(fontSize: 13)),
+                        Text(
+                          '$captureFrameCount เฟรม',
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                    Slider(
+                      value: captureFrameCount.toDouble(),
+                      min: AppConstants.captureFrameCountMin.toDouble(),
+                      max: AppConstants.captureFrameCountMax.toDouble(),
+                      divisions: AppConstants.captureFrameCountMax -
+                          AppConstants.captureFrameCountMin,
+                      label: '$captureFrameCount',
+                      onChanged: (v) => captureFrameCountCtrl.set(v.round()),
                     ),
                   ],
                 ),

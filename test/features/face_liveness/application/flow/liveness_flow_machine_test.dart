@@ -51,19 +51,22 @@ void main() {
     });
   });
 
-  group('debounce and advance', () {
-    test('${AppConstants.debounceFrames} consecutive passes on the only gate → FlowCapturing', () {
+  group('frame analyzed', () {
+    test('${AppConstants.batchFrameCount} consecutive passes do NOT auto-capture '
+        '(advance is owned by BatchCaptureStarted)', () {
       LivenessFlowState state = FlowEvaluating(
         gate: LivenessGate.faceQuality,
         consecutivePasses: 0,
       );
-      for (var i = 0; i < AppConstants.debounceFrames; i++) {
+      for (var i = 0; i < AppConstants.batchFrameCount; i++) {
         state = machine.reduce(
           state,
           FrameAnalyzed(pass(LivenessGate.faceQuality)),
         );
       }
-      expect(state, isA<FlowCapturing>());
+      expect(state, isA<FlowEvaluating>());
+      expect((state as FlowEvaluating).consecutivePasses,
+          AppConstants.batchFrameCount);
     });
 
     test('a failure resets consecutivePasses and surfaces lastFailure', () {
@@ -108,19 +111,18 @@ void main() {
     });
   });
 
-  group('end of pipeline', () {
-    test('passing the final gate → FlowCapturing', () {
-      var state = FlowEvaluating(
-        gate: LivenessGate.livenessBlink,
-        consecutivePasses: AppConstants.debounceFrames - 1,
+  group('batch evaluation', () {
+    test('BatchCaptureStarted in FlowEvaluating → FlowCapturing', () {
+      final state = FlowEvaluating(
+        gate: LivenessGate.faceQuality,
+        consecutivePasses: 5,
       );
-      final next = machine.reduce(
-        state,
-        FrameAnalyzed(pass(LivenessGate.livenessBlink)),
-      );
+      final next = machine.reduce(state, const BatchCaptureStarted());
       expect(next, const FlowCapturing());
     });
+  });
 
+  group('capture completion', () {
     test('FlowCapturing + CaptureComplete → FlowDone', () {
       final next = machine.reduce(
         const FlowCapturing(),

@@ -31,20 +31,36 @@ class AppConstants {
   static const double faceDetectionMinScore = 0.50;
   static const double postCaptureHandMinConfidence = 0.10;
 
-  // Eye-occlusion detection thresholds (post-capture, Combined Score model)
-  // Each signal is scored 0 (pass) → 1 (block) with linear interpolation in the
-  // suspicious range; combined = mean of three scores; block when ≥ 0.5.
-  static const double eyeLumRatioPass = 0.55;     // eyeLum/cheekLum above this → score 0
-  static const double eyeLumRatioBlock = 0.35;    // below this → score 1
-  static const double eyeStdDevPass = 15.0;       // luminance std-dev above this → score 0
-  static const double eyeStdDevBlock = 8.0;       // below this → score 1
-  static const double eyeSaturationPass = 20.0;   // mean(max−min) per pixel above this → score 0
-  static const double eyeSaturationBlock = 12.0;  // below this → score 1
-  static const double eyeOcclusionBlockScore = 0.5; // combined ≥ this → fail
+  // Eye-occlusion detection thresholds. Ported 1:1 from production
+  // (FaceDetectionUtils.isWearingSunglasses) — weighted-bucket scoring:
+  //   Lum ratio  < block → +0.45,  < pass → +0.30
+  //   StdDev     < block → +0.30,  < pass → +0.18
+  //   Saturation < block → +0.25,  < pass → +0.15  (HSV: (max-min)/max * 255)
+  // Total ≥ blockScore → fail. 0.30 = suspicious (one strong signal trips it).
+  static const double eyeLumRatioPass = 0.55;
+  static const double eyeLumRatioBlock = 0.35;
+  static const double eyeStdDevPass = 15.0;
+  static const double eyeStdDevBlock = 8.0;
+  static const double eyeSaturationPass = 20.0;
+  static const double eyeSaturationBlock = 12.0;
+  static const double eyeOcclusionBlockScore = 0.30;
 
   // Flow machine
   static const int debounceFrames = 5;
   static const Duration gateTimeout = Duration(seconds: 20);
+
+  // Pre-capture capture session: while the face is inside the oval, the
+  // coordinator collects this many stream frames (configurable in the UI,
+  // 1..30) and shows them on the result screen along with per-frame metrics.
+  // No pass/fail decision is made — the result screen is purely informational.
+  static const int captureFrameCountDefault = 10;
+  static const int captureFrameCountMin = 1;
+  static const int captureFrameCountMax = 30;
+  // Legacy 5-frame batch constant kept for tests still referencing it.
+  static const int batchFrameCount = 5;
+  // Hands with confidence at/above this value count toward the per-frame
+  // hand count surfaced on the result screen.
+  static const double preCaptureHandBlockThreshold = 0.10;
 
   // Head pose (for "look straight")
   static const double headPoseMaxYawDegrees = 15.0;

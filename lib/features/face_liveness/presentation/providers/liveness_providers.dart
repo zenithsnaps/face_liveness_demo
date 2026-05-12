@@ -7,6 +7,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../../core/env.dart';
+import '../../application/batch/pre_capture_score_thresholds.dart';
+import '../../application/batch/score_frame_analyzer.dart';
 import '../../application/flow/liveness_flow_event.dart';
 import '../../application/flow/liveness_flow_machine.dart';
 import '../../application/flow/liveness_flow_state.dart';
@@ -21,6 +23,7 @@ import '../../domain/repositories/liveness_result_repository.dart';
 import '../../domain/repositories/object_analyzer.dart';
 import '../../infrastructure/camera/camera_frame_source.dart';
 import '../../infrastructure/camera/input_image_converter.dart';
+import '../../infrastructure/image/frame_jpeg_encoder.dart';
 import '../../infrastructure/mediapipe/mediapipe_face_detection_analyzer.dart';
 import '../../infrastructure/mediapipe/mediapipe_face_landmarker_analyzer.dart';
 import '../../infrastructure/mediapipe/mediapipe_hand_analyzer.dart';
@@ -29,6 +32,7 @@ import '../../infrastructure/mlkit/mlkit_eye_contour_analyzer.dart';
 import '../../infrastructure/mlkit/mlkit_face_analyzer.dart';
 import '../../infrastructure/platform_channels/mediapipe_channel.dart';
 import '../../infrastructure/supabase/supabase_liveness_result_repository.dart';
+import '../coordinators/batch_capture_coordinator.dart';
 
 /// Camera source (singleton per session).
 final cameraSourceProvider = Provider<CameraFrameSource>((ref) {
@@ -92,6 +96,35 @@ final validateCaptureProvider = Provider<ValidateCapture>((ref) {
 
 final pipelineProvider = Provider<RunPipeline>((ref) {
   return RunPipeline();
+});
+
+// ---------------------------------------------------------------------------
+// Pre-capture 5-frame batch — replaces post-capture validation at runtime.
+// ---------------------------------------------------------------------------
+
+final preCaptureScoreThresholdsProvider =
+    Provider<PreCaptureScoreThresholds>((ref) {
+  return PreCaptureScoreThresholds.defaults;
+});
+
+final scoreFrameAnalyzerProvider = Provider<ScoreFrameAnalyzer>((ref) {
+  return ScoreFrameAnalyzer(
+    channel: ref.read(mediaPipeChannelProvider),
+    face: ref.read(faceDetectionAnalyzerProvider),
+    hand: ref.read(handAnalyzerProvider),
+  );
+});
+
+final frameJpegEncoderProvider = Provider<FrameJpegEncoder>((ref) {
+  return FrameJpegEncoder(ref.read(mediaPipeChannelProvider));
+});
+
+final batchCaptureCoordinatorProvider =
+    Provider<BatchCaptureCoordinator>((ref) {
+  final encoder = ref.read(frameJpegEncoderProvider);
+  return BatchCaptureCoordinator(
+    encoder: encoder.encodeToTempFile,
+  );
 });
 
 final flowMachineProvider = Provider<LivenessFlowMachine>((ref) {

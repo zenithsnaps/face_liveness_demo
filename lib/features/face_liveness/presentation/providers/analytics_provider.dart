@@ -22,6 +22,16 @@ extension AnalyticsDateRangeX on AnalyticsDateRange {
 
 enum HistogramYMode { count, density }
 
+enum DeviceFilter { all, ios, android }
+
+extension DeviceFilterX on DeviceFilter {
+  String get label => switch (this) {
+        DeviceFilter.all => 'ทุก device',
+        DeviceFilter.ios => 'iOS',
+        DeviceFilter.android => 'Android',
+      };
+}
+
 class AnalyticsFilters {
   static const defaultExcludedFailures = <String>{
     'handOccluding',
@@ -35,6 +45,7 @@ class AnalyticsFilters {
   final DateTime? customUntil;
   // failure_reason values to exclude; empty = show all
   final Set<String> excludedFailures;
+  final DeviceFilter device;
 
   const AnalyticsFilters({
     this.testCases = const {},
@@ -42,6 +53,7 @@ class AnalyticsFilters {
     this.customFrom,
     this.customUntil,
     this.excludedFailures = defaultExcludedFailures,
+    this.device = DeviceFilter.all,
   });
 
   DateTime? get since => switch (range) {
@@ -60,6 +72,7 @@ class AnalyticsFilters {
     Set<String>? testCases,
     AnalyticsDateRange? range,
     Set<String>? excludedFailures,
+    DeviceFilter? device,
   }) =>
       AnalyticsFilters(
         testCases: testCases ?? this.testCases,
@@ -67,6 +80,7 @@ class AnalyticsFilters {
         customFrom: customFrom,
         customUntil: customUntil,
         excludedFailures: excludedFailures ?? this.excludedFailures,
+        device: device ?? this.device,
       );
 }
 
@@ -84,8 +98,11 @@ class AnalyticsFiltersController extends Notifier<AnalyticsFilters> {
       customFrom: from,
       customUntil: until,
       excludedFailures: state.excludedFailures,
+      device: state.device,
     );
   }
+
+  void setDevice(DeviceFilter d) => state = state.copyWith(device: d);
 
   void toggleTestCase(String name) {
     final next = Set<String>.from(state.testCases);
@@ -141,6 +158,11 @@ class AnalyticsAttemptsController
               !filters.excludedFailures.contains(a.failureReason))
           .toList();
     }
+    filtered = switch (filters.device) {
+      DeviceFilter.all => filtered,
+      DeviceFilter.ios => filtered.where((a) => a.isIos).toList(),
+      DeviceFilter.android => filtered.where((a) => !a.isIos).toList(),
+    };
     return filtered;
   }
 }
