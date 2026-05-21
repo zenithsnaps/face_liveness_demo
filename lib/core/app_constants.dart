@@ -10,9 +10,9 @@ class AppConstants {
   static const double eyeOpenThreshold = 0.7;
 
   // Gate 2 — face fills frame (ratios of oval guide width)
-  static const double faceBboxMinRatio = 0.80; // below → "ขยับเข้าใกล้กล้อง"
-  static const double faceBboxTargetRatio = 0.90; // minimum to pass
-  static const double faceBboxMaxRatio = 0.98; // above → "ขยับออกเล็กน้อย"
+  static const double faceBboxMinRatio = 0.72; // below → "ขยับเข้าใกล้กล้อง"
+  static const double faceBboxTargetRatio = 0.81; // minimum to pass
+  static const double faceBboxMaxRatio = 1.08; // above → "ขยับออกเล็กน้อย"
   static const double faceQualityEyeOpenMinThreshold = 0.7;
 
   // Gate 3 — object occlusion
@@ -31,17 +31,23 @@ class AppConstants {
   static const double faceDetectionMinScore = 0.50;
   static const double postCaptureHandMinConfidence = 0.10;
 
-  // Eye-occlusion detection thresholds. Ported 1:1 from production
-  // (FaceDetectionUtils.isWearingSunglasses) — weighted-bucket scoring:
+  // Eye-occlusion detection thresholds. Weighted-bucket scoring on:
   //   Lum ratio  < block → +0.45,  < pass → +0.30
-  //   StdDev     < block → +0.30,  < pass → +0.18
   //   Saturation < block → +0.25,  < pass → +0.15  (HSV: (max-min)/max * 255)
-  // Total ≥ blockScore → fail. 0.30 = suspicious (one strong signal trips it).
+  // Total ≥ blockScore → fail (max possible = 0.70 after disabling std).
+  //
+  // StdDev bucket is disabled (both thresholds = 0 → `std < 0` never holds,
+  // contributing 0 to score) because human eye texture (sclera/iris/lashes)
+  // gives std in the 30–90 band that overlaps with sunglasses-with-reflection
+  // → too noisy to be a reliable signal. The check is now purely color-based:
+  // eye region must be darker than cheek (lum) and/or less chromatic (sat).
+  // saturationPass relaxed (20→130) so warm-tinted sunglasses with reflections
+  // (eye-ROI Sat ≈ 120) also trip the pass bucket.
   static const double eyeLumRatioPass = 0.55;
   static const double eyeLumRatioBlock = 0.35;
-  static const double eyeStdDevPass = 15.0;
-  static const double eyeStdDevBlock = 8.0;
-  static const double eyeSaturationPass = 20.0;
+  static const double eyeStdDevPass = 0.0;
+  static const double eyeStdDevBlock = 0.0;
+  static const double eyeSaturationPass = 130.0;
   static const double eyeSaturationBlock = 12.0;
   static const double eyeOcclusionBlockScore = 0.30;
 
@@ -63,9 +69,9 @@ class AppConstants {
   static const double preCaptureHandBlockThreshold = 0.10;
 
   // Head pose (for "look straight")
-  static const double headPoseMaxYawDegrees = 15.0;
-  static const double headPoseMaxPitchDegrees = 15.0;
-  static const double headPoseMaxRollDegrees = 15.0;
+  static const double headPoseMaxYawDegrees = 16.5;
+  static const double headPoseMaxPitchDegrees = 16.5;
+  static const double headPoseMaxRollDegrees = 16.5;
 
   // MediaPipe platform channel
   static const String mediaPipeChannelName = 'app.mymo/mediapipe';

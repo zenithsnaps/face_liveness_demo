@@ -1,5 +1,3 @@
-import 'dart:math' as math;
-
 import '../../../../core/app_constants.dart';
 import '../../../../core/result.dart';
 import '../../domain/entities/face_snapshot.dart';
@@ -8,7 +6,7 @@ import '../../domain/failures/liveness_failure.dart';
 import '../../domain/value_objects/rect2d.dart';
 import 'pre_capture_checks.dart';
 
-/// Gate 2 — face fills the oval guide, head is roughly straight, eyes open.
+/// Gate 2 — face fills the oval guide, head is roughly straight.
 ///
 /// Takes the detected face and the oval guide rect (in frame pixel space)
 /// and returns either `Ok(unit)` or `Err(LivenessFailure)`.
@@ -38,8 +36,8 @@ class CheckFaceQuality {
       return const Err(LivenessFailure.faceTooSmall);
     }
 
-    // Center of face must lie inside the oval guide.
-    if (!ovalGuide.contains(face.boundingBox.center)) {
+    // Center of face must lie inside the oval guide (±15% tolerance).
+    if (!ovalGuide.expanded(0.10).contains(face.boundingBox.center)) {
       return const Err(LivenessFailure.faceOffCenter);
     }
 
@@ -51,23 +49,6 @@ class CheckFaceQuality {
         pitch > AppConstants.headPoseMaxPitchDegrees ||
         roll > AppConstants.headPoseMaxRollDegrees) {
       return const Err(LivenessFailure.headPoseOff);
-    }
-
-    if (checks.eyesEnabled) {
-      // Both eye landmarks must be detected (eyes not covered / occluded).
-      if (face.landmarks[FaceLandmarkType.leftEye] == null ||
-          face.landmarks[FaceLandmarkType.rightEye] == null) {
-        return const Err(LivenessFailure.eyesNotVisible);
-      }
-
-      // Both eyes open — threshold aligned with blink's "open" threshold.
-      final minEyeOpen = math.min(
-        face.leftEyeOpenProbability.value,
-        face.rightEyeOpenProbability.value,
-      );
-      if (minEyeOpen < AppConstants.faceQualityEyeOpenMinThreshold) {
-        return const Err(LivenessFailure.eyesClosed);
-      }
     }
 
     return const Ok(null);

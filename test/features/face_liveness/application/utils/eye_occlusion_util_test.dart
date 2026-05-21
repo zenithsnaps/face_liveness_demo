@@ -97,7 +97,7 @@ void main() {
       expect(r.combinedScore, lessThan(0.30));
     });
 
-    test('dark solid eye region → opaque on all 3 signals → score = 1.0', () {
+    test('dark solid eye region → opaque on lum+sat → score = 0.70', () {
       _fillSolid(frame, 38, 98, 90, 140, 10, 10, 10);
       _fillSolid(frame, 110, 98, 162, 140, 10, 10, 10);
 
@@ -107,11 +107,11 @@ void main() {
       );
 
       // lumRatio (~10/~180) far below 0.35 → +0.45
-      // stdDev = 0 → +0.30
       // saturation = 0 (max==min) → +0.25
-      // → total = 1.00, occluded
+      // stdDev bucket disabled (thresholds = 0) → +0.00
+      // → total = 0.70 (was 1.00 before disabling std), occluded
       expect(r.occluded, isTrue);
-      expect(r.combinedScore, closeTo(1.0, 0.01));
+      expect(r.combinedScore, closeTo(0.70, 0.01));
     });
 
     test('moderately dark + flat lens → blocked at suspicious threshold', () {
@@ -124,7 +124,7 @@ void main() {
         faceBox: _faceBox,
       );
 
-      // suspicious-lum (0.30) + opaque-std (0.30) + opaque-sat (0.25) = 0.85
+      // suspicious-lum (0.30) + opaque-sat (0.25) = 0.55 (was 0.85 with std)
       expect(r.occluded, isTrue);
       expect(r.combinedScore, greaterThanOrEqualTo(0.30));
     });
@@ -178,14 +178,14 @@ void main() {
       _fillSolid(frame, 38, 98, 90, 140, 10, 10, 10);
       _fillSolid(frame, 110, 98, 162, 140, 10, 10, 10);
 
-      // Default 0.30 → occluded. Override 1.1 → score < 1.1 always → not occluded.
+      // Default 0.30 → occluded. Override 0.80 → score (0.70) < 0.80 → not occluded.
       final r = EyeOcclusionUtil.detect(
         frame: _wrapBytes(frame),
         faceBox: _faceBox,
-        thresholds: const EyeOcclusionThresholds(blockScore: 1.1),
+        thresholds: const EyeOcclusionThresholds(blockScore: 0.80),
       );
 
-      expect(r.combinedScore, closeTo(1.0, 0.01));
+      expect(r.combinedScore, closeTo(0.70, 0.01));
       expect(r.occluded, isFalse);
     });
 
