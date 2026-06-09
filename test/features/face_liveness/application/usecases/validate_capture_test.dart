@@ -9,7 +9,9 @@ import 'package:face_liveness_demo/features/face_liveness/domain/entities/face_s
 import 'package:face_liveness_demo/features/face_liveness/domain/entities/frame_data.dart';
 import 'package:face_liveness_demo/features/face_liveness/domain/entities/frame_metadata.dart';
 import 'package:face_liveness_demo/features/face_liveness/domain/failures/liveness_failure.dart';
+import 'package:face_liveness_demo/features/face_liveness/domain/entities/glasses_evidence.dart';
 import 'package:face_liveness_demo/features/face_liveness/domain/repositories/eye_contour_analyzer.dart';
+import 'package:face_liveness_demo/features/face_liveness/domain/repositories/glasses_classifier_analyzer.dart';
 import 'package:face_liveness_demo/features/face_liveness/domain/value_objects/confidence.dart';
 import 'package:face_liveness_demo/features/face_liveness/domain/value_objects/rect2d.dart';
 import 'package:face_liveness_demo/features/face_liveness/infrastructure/mediapipe/mediapipe_face_detection_analyzer.dart';
@@ -44,6 +46,22 @@ class FakeEyeContourAnalyzer implements EyeContourAnalyzer {
   Future<void> dispose() async {}
 }
 
+class FakeGlassesClassifierAnalyzer implements GlassesClassifierAnalyzer {
+  // Default: no sunglasses (proba 0) so it never blocks unless a test opts in.
+  Result<GlassesEvidence, AnalyzerError> nextResult =
+      const Ok(GlassesEvidence(sunglassesProba: 0, threshold: 0.5));
+
+  @override
+  Future<Result<GlassesEvidence, AnalyzerError>> analyze(
+    FrameData frame, {
+    Rect2D? faceBox,
+  }) async =>
+      nextResult;
+
+  @override
+  Future<void> dispose() async {}
+}
+
 // --- Helpers ---------------------------------------------------------------
 
 const _frame = FrameData(
@@ -69,6 +87,7 @@ ValidateCapture _buildUseCase({
   required FakeHandAnalyzer handAnalyzer,
   required FakeFaceLandmarkerAnalyzer landmarkerAnalyzer,
   FakeEyeContourAnalyzer? eyeContourAnalyzer,
+  FakeGlassesClassifierAnalyzer? glassesAnalyzer,
 }) {
   return ValidateCapture(
     faceAnalyzer: faceAnalyzer,
@@ -76,6 +95,7 @@ ValidateCapture _buildUseCase({
     faceLandmarkerAnalyzer: landmarkerAnalyzer,
     eyeContourAnalyzer: eyeContourAnalyzer ?? FakeEyeContourAnalyzer(),
     eyeOcclusionCheck: const CheckNoEyeOcclusion(),
+    glassesAnalyzer: glassesAnalyzer ?? FakeGlassesClassifierAnalyzer(),
   );
 }
 
@@ -124,6 +144,74 @@ void main() {
       final result = await usecase(
         _frame,
         thresholds: _defaultThresholds,
+      );
+
+      expect(result.passed, isTrue);
+    });
+  });
+
+  group('sunglasses classifier gate', () {
+    test('sunglasses detected → eyeOccluded + glassesEvidence populated',
+        () async {
+      faceAnalyzer.nextResult = const Ok([_goodFace]);
+      landmarkerAnalyzer.nextResult = const Ok({});
+      final glasses = FakeGlassesClassifierAnalyzer()
+        ..nextResult = const Ok(
+            GlassesEvidence(sunglassesProba: 0.91, threshold: 0.5));
+      usecase = _buildUseCase(
+        faceAnalyzer: faceAnalyzer,
+        handAnalyzer: handAnalyzer,
+        landmarkerAnalyzer: landmarkerAnalyzer,
+        glassesAnalyzer: glasses,
+      );
+
+      final result = await usecase(_frame, thresholds: _defaultThresholds);
+
+      expect(result.failure, LivenessFailure.eyeOccluded);
+      expect(result.glassesEvidence?.isWearingSunglasses, isTrue);
+    });
+
+    test('classifier error → skipped, capture still passes', () async {
+      faceAnalyzer.nextResult = const Ok([_goodFace]);
+      landmarkerAnalyzer.nextResult = const Ok({});
+      final glasses = FakeGlassesClassifierAnalyzer()
+        ..nextResult = Err(AnalyzerError('model boom'));
+      usecase = _buildUseCase(
+        faceAnalyzer: faceAnalyzer,
+        handAnalyzer: handAnalyzer,
+        landmarkerAnalyzer: landmarkerAnalyzer,
+        glassesAnalyzer: glasses,
+      );
+
+      final result = await usecase(_frame, thresholds: _defaultThresholds);
+
+      expect(result.passed, isTrue);
+      expect(result.glassesEvidence, isNull);
+    });
+
+    test('glassesEnabled=false → not blocked even when sunglasses present',
+        () async {
+      faceAnalyzer.nextResult = const Ok([_goodFace]);
+      landmarkerAnalyzer.nextResult = const Ok({});
+      final glasses = FakeGlassesClassifierAnalyzer()
+        ..nextResult = const Ok(
+            GlassesEvidence(sunglassesProba: 0.99, threshold: 0.5));
+      usecase = _buildUseCase(
+        faceAnalyzer: faceAnalyzer,
+        handAnalyzer: handAnalyzer,
+        landmarkerAnalyzer: landmarkerAnalyzer,
+        glassesAnalyzer: glasses,
+      );
+
+      final result = await usecase(
+        _frame,
+        thresholds: _defaultThresholds,
+        checks: const PostCaptureChecks(
+          faceEnabled: true,
+          handEnabled: true,
+          eyeOcclusionEnabled: false,
+          glassesEnabled: false,
+        ),
       );
 
       expect(result.passed, isTrue);
@@ -205,6 +293,7 @@ void main() {
           faceEnabled: false,
           handEnabled: true,
           eyeOcclusionEnabled: false,
+          glassesEnabled: false,
         ),
       );
 
@@ -224,6 +313,7 @@ void main() {
           faceEnabled: true,
           handEnabled: false,
           eyeOcclusionEnabled: false,
+          glassesEnabled: false,
         ),
       );
 
@@ -241,6 +331,7 @@ void main() {
           faceEnabled: false,
           handEnabled: false,
           eyeOcclusionEnabled: false,
+          glassesEnabled: false,
         ),
       );
 

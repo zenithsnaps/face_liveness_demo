@@ -17,6 +17,7 @@ enum MediaPipePlugin {
     private static var objectBridge: ObjectAnalyzerBridge?
     private static var faceBridge: FaceDetectorBridge?
     private static var faceLandmarkerBridge: FaceLandmarkerBridge?
+    private static var glassesBridge: GlassesClassifierBridge?
     private static let workQueue = DispatchQueue(label: "app.mymo.mediapipe", qos: .userInitiated)
 
     static func register(with messenger: FlutterBinaryMessenger) {
@@ -36,6 +37,11 @@ enum MediaPipePlugin {
                 if objectBridge == nil { objectBridge = try ObjectAnalyzerBridge() }
                 if faceBridge == nil { faceBridge = try FaceDetectorBridge() }
                 if faceLandmarkerBridge == nil { faceLandmarkerBridge = try FaceLandmarkerBridge() }
+                // Fail-soft: a missing/incompatible glasses model must not abort
+                // initialize and take the core hand/face/object tasks down with it.
+                // When absent, the sunglasses check skips itself (caller treats the
+                // classify error as Err → fail-open).
+                if glassesBridge == nil { glassesBridge = try? GlassesClassifierBridge() }
                 DispatchQueue.main.async { result(nil) }
             case "detectHands":
                 guard let frame = FrameArgs.fromAny(call.arguments) else {
@@ -77,6 +83,26 @@ enum MediaPipePlugin {
                 if faceLandmarkerBridge == nil { faceLandmarkerBridge = try FaceLandmarkerBridge() }
                 let landmarkResult = try faceLandmarkerBridge!.detect(frame: frame)
                 DispatchQueue.main.async { result(landmarkResult) }
+            case "classifyGlasses":
+                guard let map = call.arguments as? [String: Any],
+                      let frame = FrameArgs.fromAny(call.arguments) else {
+                    DispatchQueue.main.async {
+                        result(FlutterError(code: "BAD_ARGS", message: "expected Map", details: nil))
+                    }
+                    return
+                }
+                if glassesBridge == nil { glassesBridge = try GlassesClassifierBridge() }
+                // Optional normalized [0,1] ROI: {left, top, width, height}.
+                var roi: CGRect?
+                if let r = map["roi"] as? [String: Any],
+                   let l = (r["left"] as? NSNumber)?.doubleValue,
+                   let t = (r["top"] as? NSNumber)?.doubleValue,
+                   let w = (r["width"] as? NSNumber)?.doubleValue,
+                   let h = (r["height"] as? NSNumber)?.doubleValue {
+                    roi = CGRect(x: l, y: t, width: w, height: h)
+                }
+                let proba = try glassesBridge!.classify(frame: frame, roi: roi)
+                DispatchQueue.main.async { result(proba) }
             case "encodeFrameToJpeg":
                 guard let map = call.arguments as? [String: Any],
                       let frame = FrameArgs.fromAny(call.arguments),
@@ -103,6 +129,7 @@ enum MediaPipePlugin {
                 objectBridge = nil
                 faceBridge = nil
                 faceLandmarkerBridge = nil
+                glassesBridge = nil
                 DispatchQueue.main.async { result(nil) }
             default:
                 DispatchQueue.main.async { result(FlutterMethodNotImplemented) }

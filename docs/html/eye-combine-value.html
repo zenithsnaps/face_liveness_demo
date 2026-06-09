@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Eye Combine Value — Logic อธิบายแบบ Interactive</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --panel: #181b24;
+    --panel-2: #1f2330;
+    --border: #2a2f3d;
+    --text: #e6e9ef;
+    --muted: #9aa3b3;
+    --accent: #5b9dff;
+    --green: #36c98e;
+    --amber: #f6b545;
+    --red: #ff6b6b;
+    --mono: "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+    --sans: -apple-system, "Segoe UI", "Noto Sans Thai", Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    line-height: 1.6;
+  }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 32px 20px 96px; }
+  header.hero {
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 24px;
+    margin-bottom: 32px;
+  }
+  h1 { font-size: 28px; margin: 0 0 8px; letter-spacing: -0.3px; }
+  h2 {
+    font-size: 20px; margin: 48px 0 16px;
+    padding-left: 12px; border-left: 3px solid var(--accent);
+  }
+  h3 { font-size: 16px; margin: 24px 0 10px; color: #c8cfdc; }
+  p { color: #c4cad6; }
+  .lead { color: var(--muted); font-size: 15px; }
+  .pill {
+    display: inline-block; font-family: var(--mono); font-size: 12px;
+    background: var(--panel-2); border: 1px solid var(--border);
+    border-radius: 6px; padding: 2px 8px; color: var(--accent);
+  }
+  code {
+    font-family: var(--mono); font-size: 13px;
+    background: var(--panel-2); padding: 1px 6px; border-radius: 5px;
+    color: #ffd479;
+  }
+  .card {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 12px; padding: 20px 22px; margin: 16px 0;
+  }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 760px) { .grid2 { grid-template-columns: 1fr; } }
+
+  /* pipeline */
+  .pipe { display: flex; flex-direction: column; gap: 0; }
+  .step {
+    display: flex; gap: 14px; align-items: flex-start;
+    padding: 14px 0; position: relative;
+  }
+  .step .num {
+    flex: 0 0 32px; height: 32px; border-radius: 50%;
+    background: var(--panel-2); border: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--mono); font-size: 14px; color: var(--accent);
+  }
+  .step:not(:last-child)::before {
+    content: ""; position: absolute; left: 15px; top: 46px; bottom: -14px;
+    width: 2px; background: var(--border);
+  }
+  .step .body { flex: 1; }
+  .step .body b { color: var(--text); }
+  .step .body span { color: var(--muted); font-size: 14px; }
+
+  /* table */
+  table { width: 100%; border-collapse: collapse; font-size: 14px; margin: 8px 0; }
+  th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--border); }
+  th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+  td.mono, th.mono { font-family: var(--mono); }
+  .tag-block { color: var(--red); font-weight: 600; }
+  .tag-pass { color: var(--green); font-weight: 600; }
+
+  /* interactive calculator */
+  .calc-row { display: grid; grid-template-columns: 150px 1fr 90px; gap: 14px; align-items: center; margin: 18px 0; }
+  @media (max-width: 600px){ .calc-row{ grid-template-columns: 1fr; gap:6px;} }
+  .calc-row label { font-size: 14px; color: #cfd5e0; }
+  .calc-row label small { display:block; color: var(--muted); font-size:12px; }
+  input[type=range] { width: 100%; accent-color: var(--accent); }
+  .valbox {
+    font-family: var(--mono); font-size: 14px; text-align: right;
+    background: var(--panel-2); border:1px solid var(--border);
+    border-radius:6px; padding:6px 8px;
+  }
+  .contrib { font-family: var(--mono); font-size: 12px; margin-top:4px; }
+  .contrib.b { color: var(--red); }
+  .contrib.p { color: var(--amber); }
+  .contrib.z { color: var(--green); }
+
+  .score-display {
+    margin-top: 22px; padding: 20px; border-radius: 12px;
+    text-align: center; border: 1px solid var(--border);
+    background: var(--panel-2); transition: background .2s, border-color .2s;
+  }
+  .score-num { font-family: var(--mono); font-size: 48px; font-weight: 700; line-height: 1; }
+  .score-verdict { font-size: 16px; margin-top: 8px; font-weight: 600; }
+  .bar { height: 14px; border-radius: 7px; background: var(--panel); margin-top:16px; overflow:hidden; border:1px solid var(--border); position:relative;}
+  .bar .fill { height:100%; transition: width .2s, background .2s; }
+  .bar .thresh { position:absolute; top:-4px; bottom:-4px; width:2px; background:#fff; opacity:.7;}
+  .bar .thresh::after{ content:"block 0.30"; position:absolute; top:-18px; left:-26px; font-size:10px; color:var(--muted); white-space:nowrap;}
+
+  /* face diagram */
+  .face-svg { width: 100%; max-width: 360px; display:block; margin: 0 auto; }
+  .legend { display:flex; gap:18px; flex-wrap:wrap; justify-content:center; margin-top:12px; font-size:13px; }
+  .legend span { display:flex; align-items:center; gap:6px; color: var(--muted);}
+  .legend i { width:14px; height:14px; border-radius:3px; display:inline-block; }
+
+  .note { font-size:13px; color: var(--muted); border-left:3px solid var(--amber); padding:6px 0 6px 12px; margin:14px 0;}
+  .src { font-family: var(--mono); font-size:12px; color: var(--muted); }
+  .formula { font-family: var(--mono); background: var(--panel-2); border:1px solid var(--border); border-radius:8px; padding:14px 16px; font-size:13.5px; color:#d6dce8; overflow-x:auto;}
+  .preset-btns { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:6px;}
+  .preset-btns button {
+    background: var(--panel-2); color: var(--text); border:1px solid var(--border);
+    border-radius:8px; padding:7px 12px; font-size:13px; cursor:pointer; font-family:var(--sans);
+  }
+  .preset-btns button:hover { border-color: var(--accent); color: var(--accent); }
+  footer { margin-top:64px; padding-top:20px; border-top:1px solid var(--border); color:var(--muted); font-size:13px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="hero">
+    <span class="pill">face_liveness · eye occlusion</span>
+    <h1>Eye Combine Value — มันคำนวณยังไง?</h1>
+    <p class="lead">
+      เอกสาร interactive อธิบาย logic การได้มาซึ่งค่า <code>combinedScore</code>
+      (หรือที่เก็บใน Supabase ว่า <code>eye_combined</code>) — ค่าที่ใช้ตัดสินว่าผู้ใช้
+      <b>ใส่แว่นกันแดด / มีอะไรบังตา</b> หรือไม่ ระหว่างทำ face liveness
+    </p>
+    <p class="src">ที่มาของ logic: <code>lib/features/face_liveness/application/utils/eye_occlusion_util.dart</code> · port 1:1 จาก production Kotlin (<code>FaceDetectionUtils.isWearingSunglasses</code>)</p>
+  </header>
+
+  <!-- TL;DR -->
+  <div class="card">
+    <h3 style="margin-top:0">⚡ TL;DR — สรุปสั้น ๆ</h3>
+    <p style="margin:6px 0">
+      เราไม่ได้ดูว่า "ตาเปิด/ปิด" — เราดูว่า <b>บริเวณดวงตามืด/เรียบ/ซีด</b>
+      เมื่อเทียบกับ <b>แก้ม</b> หรือเปล่า ถ้าใช่ = น่าจะมีแว่นดำบัง
+    </p>
+    <ol style="margin:6px 0; color:#c4cad6">
+      <li>ตัด ROI 4 กรอบจาก face bounding box: <b>ตาซ้าย, ตาขวา, แก้มซ้าย, แก้มขวา</b> (ใช้สัดส่วนล้วน ๆ ไม่พึ่ง landmark)</li>
+      <li>รวม pixel ของตาซ้าย+ขวาเป็นก้อนเดียว / แก้มซ้าย+ขวาเป็นก้อนเดียว แล้วคำนวณสถิติ 3 ตัว: <b>ความสว่าง (Y), ความแปรปรวน (stdDev), ความอิ่มสี (saturation)</b></li>
+      <li>เทียบความสว่างตากับแก้ม → <code>luminanceRatio</code></li>
+      <li>เอา 3 สัญญาณเข้าระบบ <b>ให้คะแนนแบบ bucket</b> บวกกันได้ค่า 0.00 – 1.00</li>
+      <li>ถ้าคะแนนรวม ≥ <b>0.30</b> → ตัดสินว่า <span class="tag-block">บังตา (occluded)</span></li>
+    </ol>
+  </div>
+
+  <!-- Pipeline -->
+  <h2>1. Pipeline ภาพรวม</h2>
+  <div class="card">
+    <div class="pipe">
+      <div class="step"><div class="num">1</div><div class="body"><b>รับ frame</b> — RGBA8888 ที่หมุนตั้งตรงแล้ว + <code>faceBox</code> (กรอบหน้า)<br><span>ถ้า frame เป็น front camera ที่ถูก mirror → flip กรอบกลับก่อน</span></div></div>
+      <div class="step"><div class="num">2</div><div class="body"><b>เช็คขนาดหน้า</b> — ถ้าหน้าเล็กกว่า 40×40 px หลัง clip → คืน <code>combinedScore = 0</code>, ไม่บัง</div></div>
+      <div class="step"><div class="num">3</div><div class="body"><b>ตัด ROI 4 กรอบ</b> จากสัดส่วนของ faceBox (ดูแผนภาพข้อ 2)</div></div>
+      <div class="step"><div class="num">4</div><div class="body"><b>คำนวณสถิติ pixel</b> — <code>meanY</code>, <code>stdY</code>, <code>meanSat</code> ของก้อนตา (รวม) และก้อนแก้ม (รวม)</div></div>
+      <div class="step"><div class="num">5</div><div class="body"><b>luminanceRatio</b> = ความสว่างตา ÷ ความสว่างแก้ม</div></div>
+      <div class="step"><div class="num">6</div><div class="body"><b>bucket scoring</b> — รวม 3 สัญญาณเป็น <code>combinedScore</code> (0–1)</div></div>
+      <div class="step"><div class="num">7</div><div class="body"><b>ตัดสิน</b> — <code>occluded = combinedScore ≥ 0.30</code> → ถ้า true ส่ง <code>LivenessFailure.eyeOccluded</code></div></div>
+    </div>
+  </div>
+
+  <!-- ROI diagram -->
+  <h2>2. ROI — ตำแหน่งกรอบบนใบหน้า</h2>
+  <div class="card">
+    <p>ทุกกรอบคำนวณจากสัดส่วนของ <code>faceBox</code> (กว้าง = <code>fw</code>, สูง = <code>fh</code>) — ไม่ใช้ landmark เลย จุดสำคัญคือ <b>แก้มเป็นค่าอ้างอิง (reference)</b> เพราะเป็นผิวหน้าที่ปกติไม่ถูกบัง</p>
+    <svg class="face-svg" viewBox="0 0 200 240" xmlns="http://www.w3.org/2000/svg">
+      <!-- face outline -->
+      <rect x="20" y="20" width="160" height="200" rx="60" fill="#20242f" stroke="#3a4150" stroke-width="1.5"/>
+      <!-- faceBox label -->
+      <text x="100" y="14" fill="#9aa3b3" font-size="9" text-anchor="middle" font-family="monospace">faceBox (fw × fh)</text>
+      <!-- left eye: x 0.16-0.44, y 0.30-0.46 -->
+      <rect x="45.6" y="80" width="44.8" height="32" fill="rgba(91,157,255,0.28)" stroke="#5b9dff" stroke-width="1.2"/>
+      <!-- right eye: x 0.56-0.84 -->
+      <rect x="109.6" y="80" width="44.8" height="32" fill="rgba(91,157,255,0.28)" stroke="#5b9dff" stroke-width="1.2"/>
+      <!-- left cheek: x 0.18-0.43, y 0.58-0.76 -->
+      <rect x="48.8" y="136" width="40" height="36" fill="rgba(54,201,142,0.25)" stroke="#36c98e" stroke-width="1.2"/>
+      <!-- right cheek: x 0.57-0.82 -->
+      <rect x="111.2" y="136" width="40" height="36" fill="rgba(54,201,142,0.25)" stroke="#36c98e" stroke-width="1.2"/>
+      <!-- nose hint -->
+      <line x1="100" y1="112" x2="100" y2="130" stroke="#3a4150" stroke-width="1.5"/>
+      <text x="68" y="100" fill="#cdd5e3" font-size="8" text-anchor="middle">eye L</text>
+      <text x="132" y="100" fill="#cdd5e3" font-size="8" text-anchor="middle">eye R</text>
+      <text x="68.8" y="157" fill="#cdd5e3" font-size="8" text-anchor="middle">cheek L</text>
+      <text x="131.2" y="157" fill="#cdd5e3" font-size="8" text-anchor="middle">cheek R</text>
+    </svg>
+    <div class="legend">
+      <span><i style="background:#5b9dff"></i> Eye ROI — บริเวณที่จะตรวจว่าถูกบัง</span>
+      <span><i style="background:#36c98e"></i> Cheek ROI — ผิวอ้างอิง (reference)</span>
+    </div>
+    <table>
+      <tr><th>ROI</th><th class="mono">x (สัดส่วน fw)</th><th class="mono">y (สัดส่วน fh)</th></tr>
+      <tr><td>ตาซ้าย</td><td class="mono">0.16 → 0.44</td><td class="mono">0.30 → 0.46</td></tr>
+      <tr><td>ตาขวา</td><td class="mono">0.56 → 0.84</td><td class="mono">0.30 → 0.46</td></tr>
+      <tr><td>แก้มซ้าย</td><td class="mono">0.18 → 0.43</td><td class="mono">0.58 → 0.76</td></tr>
+      <tr><td>แก้มขวา</td><td class="mono">0.57 → 0.82</td><td class="mono">0.58 → 0.76</td></tr>
+    </table>
+    <div class="note">ตาซ้าย+ขวาถูก <b>รวม pixel เข้าด้วยกัน (pool)</b> แล้วค่อยคำนวณสถิติ — ไม่ได้เอา min/max ของแต่ละข้าง ค่าต่อข้าง (leftScore / rightScore) คำนวณแยกไว้เพื่อ debug/แสดงผลเท่านั้น <b>การตัดสินใช้ค่ารวมเสมอ</b></div>
+  </div>
+
+  <!-- signals -->
+  <h2>3. สถิติ pixel 3 ตัว ที่คำนวณต่อ ROI</h2>
+  <div class="card">
+    <p>ไล่ทุก pixel ใน ROI แล้วสะสมค่า:</p>
+    <div class="formula">
+Y (luminance, ITU-R BT.601) = 0.299·R + 0.587·G + 0.114·B
+Sat (HSV style)             = (max(R,G,B) − min(R,G,B)) / max(R,G,B) × 255
+
+meanY  = ค่าเฉลี่ย Y            → ตา "มืด" แค่ไหน
+stdY   = ส่วนเบี่ยงเบนมาตรฐาน Y  → ตา "เรียบ/แบน" แค่ไหน (เลนส์ทึบ = เรียบ)
+meanSat= ค่าเฉลี่ย Sat          → ตา "ซีด/ไม่มีสี" แค่ไหน
+    </div>
+    <div class="grid2" style="margin-top:14px">
+      <div class="card" style="margin:0"><h3 style="margin-top:0">🔅 luminanceRatio</h3><span class="src">eyeStats.meanY / cheekStats.meanY</span><p style="margin:8px 0 0">ตามืดเทียบกับแก้ม → ค่าต่ำ = น่าสงสัยว่าบัง</p></div>
+      <div class="card" style="margin:0"><h3 style="margin-top:0">📉 stdDev (stdY)</h3><span class="src">ความแปรปรวนของแสงในกรอบตา</span><p style="margin:8px 0 0">เลนส์ดำทึบ = สีเรียบ = std ต่ำ</p></div>
+      <div class="card" style="margin:0"><h3 style="margin-top:0">🎨 saturation</h3><span class="src">meanSat ของกรอบตา</span><p style="margin:8px 0 0">เลนส์เทา/ดำ = สีจาง = sat ต่ำ</p></div>
+      <div class="card" style="margin:0"><h3 style="margin-top:0">🛡️ guard</h3><span class="src">cheekStats.meanY ≤ 1.0</span><p style="margin:8px 0 0">ถ้าแก้มมืดผิดปกติ (หารด้วย ~0) → คืนค่าว่าง ไม่ตัดสิน</p></div>
+    </div>
+  </div>
+
+  <!-- bucket scoring + interactive -->
+  <h2>4. Bucket Scoring + เครื่องคิดเลข Interactive</h2>
+  <div class="card">
+    <p>แต่ละสัญญาณให้คะแนนแบบ 3 ระดับ (block / suspicious / pass) แล้ว <b>บวกกัน</b>. คะแนนเต็ม = 1.00</p>
+    <table>
+      <tr><th>สัญญาณ</th><th class="mono">&lt; block</th><th class="mono">&lt; pass</th><th class="mono">else</th></tr>
+      <tr><td>luminanceRatio</td><td class="mono"><span class="tag-block">&lt;0.35 → +0.45</span></td><td class="mono" style="color:var(--amber)">&lt;0.55 → +0.30</td><td class="mono"><span class="tag-pass">+0</span></td></tr>
+      <tr><td>stdDev</td><td class="mono"><span class="tag-block">&lt;8.0 → +0.30</span></td><td class="mono" style="color:var(--amber)">&lt;15.0 → +0.18</td><td class="mono"><span class="tag-pass">+0</span></td></tr>
+      <tr><td>saturation</td><td class="mono"><span class="tag-block">&lt;12 → +0.25</span></td><td class="mono" style="color:var(--amber)">&lt;20 → +0.15</td><td class="mono"><span class="tag-pass">+0</span></td></tr>
+    </table>
+    <p style="margin-top:12px">👉 <b>ลองเลื่อนค่าด้านล่าง</b> เพื่อดูว่าคะแนนเปลี่ยนยังไง และจะถูกตัดสินว่าบังตาเมื่อไหร่</p>
+
+    <div class="preset-btns">
+      <button onclick="preset(0.85,28,45)">😊 ตาปกติ</button>
+      <button onclick="preset(0.20,5,6)">🕶️ แว่นดำทึบ</button>
+      <button onclick="preset(0.45,11,16)">🌫️ เลนส์เทาอ่อน</button>
+      <button onclick="preset(0.50,14,19)">😐 ก้ำกึ่ง</button>
+    </div>
+
+    <div class="calc-row">
+      <label>luminanceRatio <small>ตา ÷ แก้ม</small></label>
+      <input type="range" id="lum" min="0" max="1.2" step="0.01" value="0.85" oninput="recalc()">
+      <div class="valbox" id="lumv">0.85</div>
+    </div>
+    <div class="contrib" id="lumc"></div>
+
+    <div class="calc-row">
+      <label>stdDev <small>ความแปรปรวนแสง</small></label>
+      <input type="range" id="std" min="0" max="40" step="0.5" value="28" oninput="recalc()">
+      <div class="valbox" id="stdv">28</div>
+    </div>
+    <div class="contrib" id="stdc"></div>
+
+    <div class="calc-row">
+      <label>saturation <small>ความอิ่มสี</small></label>
+      <input type="range" id="sat" min="0" max="60" step="0.5" value="45" oninput="recalc()">
+      <div class="valbox" id="satv">45</div>
+    </div>
+    <div class="contrib" id="satc"></div>
+
+    <div class="score-display" id="scorebox">
+      <div class="score-num" id="scoreNum">0.00</div>
+      <div class="score-verdict" id="verdict"></div>
+      <div class="bar"><div class="fill" id="fill"></div><div class="thresh" style="left:30%"></div></div>
+    </div>
+  </div>
+
+  <!-- downstream -->
+  <h2>5. ค่านี้ถูกใช้ที่ไหนต่อ</h2>
+  <div class="card">
+    <table>
+      <tr><th>จุด</th><th>ใช้ยังไง</th></tr>
+      <tr><td><code>validate_capture.dart</code></td><td>หลังถ่ายภาพ ถ้า <code>eyeOcclusionEnabled</code> และ <code>occluded == true</code> → fail ด้วย <code>LivenessFailure.eyeOccluded</code></td></tr>
+      <tr><td>Supabase</td><td>เก็บลง column <code>eye_combined</code> + JSON <code>occlusion_check</code> (per-eye breakdown)</td></tr>
+      <tr><td><code>result_screen.dart</code></td><td>แสดงเป็น <code>combinedScore.toStringAsFixed(2)</code></td></tr>
+    </table>
+    <div class="note"><b>อย่าสับสน:</b> การตรวจ "กระพริบตา" (blink) ใน <code>check_liveness_blink.dart</code> ใช้คนละค่า — ใช้ <code>leftEyeOpenProbability/rightEyeOpenProbability</code> จาก ML Kit (threshold 0.3 / 0.7) ไม่เกี่ยวกับ eye combine value นี้</div>
+  </div>
+
+  <!-- thresholds ref -->
+  <h2>6. ค่าคงที่ (ปรับได้)</h2>
+  <div class="card">
+    <p class="src">นิยามใน <code>lib/core/app_constants.dart</code> และห่อด้วย <code>EyeOcclusionThresholds</code> (override รายตัวได้โดยไม่แตะ global)</p>
+    <table>
+      <tr><th>constant</th><th class="mono">ค่า</th></tr>
+      <tr><td>eyeLumRatioPass</td><td class="mono">0.55</td></tr>
+      <tr><td>eyeLumRatioBlock</td><td class="mono">0.35</td></tr>
+      <tr><td>eyeStdDevPass</td><td class="mono">15.0</td></tr>
+      <tr><td>eyeStdDevBlock</td><td class="mono">8.0</td></tr>
+      <tr><td>eyeSaturationPass</td><td class="mono">20.0</td></tr>
+      <tr><td>eyeSaturationBlock</td><td class="mono">12.0</td></tr>
+      <tr><td>eyeOcclusionBlockScore</td><td class="mono">0.30</td></tr>
+    </table>
+  </div>
+
+  <footer>
+    สร้างจาก source จริง ณ 2026-05-25 · <code>eye_occlusion_util.dart</code>, <code>eye_occlusion_thresholds.dart</code>, <code>app_constants.dart</code><br>
+    หากปรับ threshold ในโค้ด อย่าลืมอัปเดตเอกสารนี้ให้ตรงกัน
+  </footer>
+</div>
+
+<script>
+  // thresholds (mirror of AppConstants)
+  const T = {
+    lumBlock: 0.35, lumPass: 0.55,
+    stdBlock: 8.0,  stdPass: 15.0,
+    satBlock: 12.0, satPass: 20.0,
+    block: 0.30,
+  };
+
+  function bucket(val, blockT, passT, blockPts, passPts) {
+    if (val < blockT) return { pts: blockPts, level: 'b' };
+    if (val < passT)  return { pts: passPts,  level: 'p' };
+    return { pts: 0, level: 'z' };
+  }
+
+  function fmtContrib(name, r, val, blockT, passT) {
+    if (r.level === 'b') return `↳ ${name} = ${val} &lt; block ${blockT} → +${r.pts.toFixed(2)}`;
+    if (r.level === 'p') return `↳ ${name} = ${val} &lt; pass ${passT} → +${r.pts.toFixed(2)}`;
+    return `↳ ${name} = ${val} ≥ pass ${passT} → +0.00`;
+  }
+
+  function recalc() {
+    const lum = parseFloat(document.getElementById('lum').value);
+    const std = parseFloat(document.getElementById('std').value);
+    const sat = parseFloat(document.getElementById('sat').value);
+    document.getElementById('lumv').textContent = lum.toFixed(2);
+    document.getElementById('stdv').textContent = std.toFixed(1);
+    document.getElementById('satv').textContent = sat.toFixed(1);
+
+    const rl = bucket(lum, T.lumBlock, T.lumPass, 0.45, 0.30);
+    const rs = bucket(std, T.stdBlock, T.stdPass, 0.30, 0.18);
+    const ra = bucket(sat, T.satBlock, T.satPass, 0.25, 0.15);
+
+    const cl = document.getElementById('lumc'); cl.innerHTML = fmtContrib('luminanceRatio', rl, lum.toFixed(2), T.lumBlock, T.lumPass); cl.className = 'contrib ' + rl.level;
+    const cs = document.getElementById('stdc'); cs.innerHTML = fmtContrib('stdDev', rs, std.toFixed(1), T.stdBlock, T.stdPass); cs.className = 'contrib ' + rs.level;
+    const ca = document.getElementById('satc'); ca.innerHTML = fmtContrib('saturation', ra, sat.toFixed(1), T.satBlock, T.satPass); ca.className = 'contrib ' + ra.level;
+
+    const score = rl.pts + rs.pts + ra.pts;
+    const occluded = score >= T.block;
+
+    document.getElementById('scoreNum').textContent = score.toFixed(2);
+    const v = document.getElementById('verdict');
+    const box = document.getElementById('scorebox');
+    const fill = document.getElementById('fill');
+    fill.style.width = Math.min(score, 1) * 100 + '%';
+
+    if (occluded) {
+      v.innerHTML = '🚫 occluded — บังตา (FAIL)';
+      v.style.color = 'var(--red)';
+      box.style.borderColor = 'var(--red)';
+      fill.style.background = 'var(--red)';
+    } else {
+      v.innerHTML = '✅ clear — ผ่าน';
+      v.style.color = 'var(--green)';
+      box.style.borderColor = 'var(--green)';
+      fill.style.background = 'var(--green)';
+    }
+  }
+
+  function preset(lum, std, sat) {
+    document.getElementById('lum').value = lum;
+    document.getElementById('std').value = std;
+    document.getElementById('sat').value = sat;
+    recalc();
+  }
+
+  recalc();
+</script>
+</body>
+</html>

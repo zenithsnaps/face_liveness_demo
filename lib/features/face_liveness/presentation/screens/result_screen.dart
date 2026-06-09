@@ -422,6 +422,13 @@ class _FrameRow extends StatelessWidget {
                   const SizedBox(height: 4),
                   _EyeEvidenceMini(evidence: score.eyeEvidence!),
                 ],
+                _MetricLine(
+                  label: 'Sunglasses (TFLite)',
+                  value: score.glassesEvidence != null
+                      ? 'P=${score.glassesEvidence!.sunglassesProba.toStringAsFixed(2)}'
+                      : '—',
+                  emphasize: score.glassesEvidence?.isWearingSunglasses ?? false,
+                ),
               ],
             ),
           ),

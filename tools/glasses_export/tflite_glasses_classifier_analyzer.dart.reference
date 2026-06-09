@@ -1,0 +1,155 @@
+import 'dart:math' as math;
+import 'dart:typed_data';
+
+import 'package:tflite_flutter/tflite_flutter.dart';
+
+import '../../../../core/app_constants.dart';
+import '../../../../core/result.dart';
+import '../../domain/entities/frame_data.dart';
+import '../../domain/entities/glasses_evidence.dart';
+import '../../domain/failures/liveness_failure.dart';
+import '../../domain/repositories/glasses_classifier_analyzer.dart';
+import '../../domain/value_objects/rect2d.dart';
+
+/// [GlassesClassifierAnalyzer] backed by a TFLite [Interpreter].
+///
+/// Model contract (see `tools/glasses_export/` and the export docs):
+///   input  : float32 NCHW (1, 3, 256, 256), RGB pixels in [0, 255]
+///   output : float32 (1, 1) = P(sunglasses)  (sigmoid already applied)
+///
+/// Frames arrive as RGBA8888 upright bytes (same as [EyeOcclusionUtil]); we
+/// crop the (expanded) face box, bilinearly resize to 256x256 and feed RGB.
+class TfliteGlassesClassifierAnalyzer implements GlassesClassifierAnalyzer {
+  final double threshold;
+  final double cropMargin;
+  final int _size;
+
+  Interpreter? _interpreter;
+
+  TfliteGlassesClassifierAnalyzer({
+    this.threshold = AppConstants.glassesBlockThreshold,
+    this.cropMargin = AppConstants.glassesFaceCropMargin,
+    int inputSize = AppConstants.glassesInputSize,
+  }) : _size = inputSize;
+
+  /// Allow injecting a pre-built interpreter (tests / custom delegates).
+  TfliteGlassesClassifierAnalyzer.withInterpreter(
+    Interpreter interpreter, {
+    this.threshold = AppConstants.glassesBlockThreshold,
+    this.cropMargin = AppConstants.glassesFaceCropMargin,
+    int inputSize = AppConstants.glassesInputSize,
+  })  : _size = inputSize,
+        _interpreter = interpreter;
+
+  Future<Interpreter> _ensureInterpreter() async {
+    return _interpreter ??= await Interpreter.fromAsset(
+      AppConstants.glassesModelAsset,
+      options: InterpreterOptions()..threads = 2,
+    );
+  }
+
+  @override
+  Future<Result<GlassesEvidence, AnalyzerError>> analyze(
+    FrameData frame, {
+    Rect2D? faceBox,
+  }) async {
+    try {
+      final imgW = frame.width;
+      final imgH = frame.height;
+      if (imgW <= 0 || imgH <= 0) {
+        return const Err(AnalyzerError('glasses: empty frame'));
+      }
+      final bytes = frame.bytes is Uint8List
+          ? frame.bytes as Uint8List
+          : Uint8List.fromList(frame.bytes);
+
+      final crop = _resolveCrop(faceBox, imgW, imgH);
+      final input = _buildInput(bytes, imgW, imgH, crop);
+
+      final interpreter = await _ensureInterpreter();
+      final output = [List<double>.filled(1, 0)]; // shape (1,1)
+      interpreter.run(input, output);
+
+      final proba = output[0][0];
+      return Ok(GlassesEvidence(sunglassesProba: proba, threshold: threshold));
+    } catch (e) {
+      return Err(AnalyzerError('glasses classifier failed', cause: e));
+    }
+  }
+
+  /// Expanded face box clamped to the image; whole frame when no box given.
+  Rect2D _resolveCrop(Rect2D? faceBox, int imgW, int imgH) {
+    if (faceBox == null) {
+      return Rect2D.fromLTWH(0, 0, imgW.toDouble(), imgH.toDouble());
+    }
+    final e = faceBox.expanded(cropMargin);
+    final left = math.max(0.0, e.left);
+    final top = math.max(0.0, e.top);
+    final right = math.min(imgW.toDouble(), e.right);
+    final bottom = math.min(imgH.toDouble(), e.bottom);
+    if (right - left < 8 || bottom - top < 8) {
+      return Rect2D.fromLTWH(0, 0, imgW.toDouble(), imgH.toDouble());
+    }
+    return Rect2D.fromLTRB(left, top, right, bottom);
+  }
+
+  /// Bilinear-resize [crop] to size×size and pack as NCHW float RGB [0,255].
+  List<List<List<List<double>>>> _buildInput(
+    Uint8List rgba,
+    int imgW,
+    int imgH,
+    Rect2D crop,
+  ) {
+    final s = _size;
+    // channel-major planes: [1][3][s][s]
+    final r = List.generate(s, (_) => List<double>.filled(s, 0));
+    final g = List.generate(s, (_) => List<double>.filled(s, 0));
+    final b = List.generate(s, (_) => List<double>.filled(s, 0));
+
+    final cw = crop.width;
+    final ch = crop.height;
+    for (var oy = 0; oy < s; oy++) {
+      // map output pixel center back into the crop, then to source coords
+      final sy = crop.top + (oy + 0.5) / s * ch - 0.5;
+      final y0 = sy.floor();
+      final wy = sy - y0;
+      final y0c = y0.clamp(0, imgH - 1);
+      final y1c = (y0 + 1).clamp(0, imgH - 1);
+      for (var ox = 0; ox < s; ox++) {
+        final sx = crop.left + (ox + 0.5) / s * cw - 0.5;
+        final x0 = sx.floor();
+        final wx = sx - x0;
+        final x0c = x0.clamp(0, imgW - 1);
+        final x1c = (x0 + 1).clamp(0, imgW - 1);
+
+        // four neighbours (RGBA stride 4)
+        final i00 = 4 * (y0c * imgW + x0c);
+        final i01 = 4 * (y0c * imgW + x1c);
+        final i10 = 4 * (y1c * imgW + x0c);
+        final i11 = 4 * (y1c * imgW + x1c);
+
+        r[oy][ox] = _bilerp(rgba[i00], rgba[i01], rgba[i10], rgba[i11], wx, wy);
+        g[oy][ox] = _bilerp(
+            rgba[i00 + 1], rgba[i01 + 1], rgba[i10 + 1], rgba[i11 + 1], wx, wy);
+        b[oy][ox] = _bilerp(
+            rgba[i00 + 2], rgba[i01 + 2], rgba[i10 + 2], rgba[i11 + 2], wx, wy);
+      }
+    }
+    return [
+      [r, g, b]
+    ];
+  }
+
+  static double _bilerp(
+      int v00, int v01, int v10, int v11, double wx, double wy) {
+    final top = v00 + (v01 - v00) * wx;
+    final bot = v10 + (v11 - v10) * wx;
+    return top + (bot - top) * wy;
+  }
+
+  @override
+  Future<void> dispose() async {
+    _interpreter?.close();
+    _interpreter = null;
+  }
+}

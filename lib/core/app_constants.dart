@@ -31,23 +31,17 @@ class AppConstants {
   static const double faceDetectionMinScore = 0.50;
   static const double postCaptureHandMinConfidence = 0.10;
 
-  // Eye-occlusion detection thresholds. Weighted-bucket scoring on:
+  // Eye-occlusion detection thresholds. Ported 1:1 from production
+  // (FaceDetectionUtils.isWearingSunglasses) — weighted-bucket scoring:
   //   Lum ratio  < block → +0.45,  < pass → +0.30
+  //   StdDev     < block → +0.30,  < pass → +0.18
   //   Saturation < block → +0.25,  < pass → +0.15  (HSV: (max-min)/max * 255)
-  // Total ≥ blockScore → fail (max possible = 0.70 after disabling std).
-  //
-  // StdDev bucket is disabled (both thresholds = 0 → `std < 0` never holds,
-  // contributing 0 to score) because human eye texture (sclera/iris/lashes)
-  // gives std in the 30–90 band that overlaps with sunglasses-with-reflection
-  // → too noisy to be a reliable signal. The check is now purely color-based:
-  // eye region must be darker than cheek (lum) and/or less chromatic (sat).
-  // saturationPass relaxed (20→130) so warm-tinted sunglasses with reflections
-  // (eye-ROI Sat ≈ 120) also trip the pass bucket.
+  // Total ≥ blockScore → fail. 0.30 = suspicious (one strong signal trips it).
   static const double eyeLumRatioPass = 0.55;
   static const double eyeLumRatioBlock = 0.35;
-  static const double eyeStdDevPass = 0.0;
-  static const double eyeStdDevBlock = 0.0;
-  static const double eyeSaturationPass = 130.0;
+  static const double eyeStdDevPass = 15.0;
+  static const double eyeStdDevBlock = 8.0;
+  static const double eyeSaturationPass = 20.0;
   static const double eyeSaturationBlock = 12.0;
   static const double eyeOcclusionBlockScore = 0.30;
 
@@ -82,4 +76,18 @@ class AppConstants {
   // Face landmarker (post-capture occlusion check)
   static const String faceLandmarkerModelAsset = 'assets/models/face_landmarker.task';
   static const double faceLandmarkerMinDetectionConfidence = 0.5;
+
+  // Sunglasses classifier (TFLite, TinyBinaryClassifier, NCHW 1x3x256x256,
+  // /255 + ImageNet-norm + sigmoid baked in -> output is P(sunglasses)).
+  // Threshold tuned on real Thai funnel data (184-frame sweep): 0.70 gave the
+  // best F1 (0.88) — recall 84%, FPR 2.2% — minimising false-blocks on users
+  // wearing CLEAR prescription glasses (allowed to pass per TH face-recognition
+  // rules). See tools/glasses_export/eval_funnel.py.
+  static const String glassesModelAsset = 'assets/models/glasses_sunglasses.tflite';
+  static const int glassesInputSize = 256;
+  static const double glassesBlockThreshold = 0.7;
+  // Face crop is expanded by this factor before inference so the lenses +
+  // surrounding context (brows/temples) are included, matching the
+  // head-and-shoulders framing the model was validated on.
+  static const double glassesFaceCropMargin = 0.6;
 }

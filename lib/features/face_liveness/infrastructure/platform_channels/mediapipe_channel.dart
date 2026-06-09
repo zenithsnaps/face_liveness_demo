@@ -67,6 +67,21 @@ class MediaPipeChannel {
     return raw ?? const {};
   }
 
+  /// Runs the MediaPipe ImageClassifier sunglasses model on [frame].
+  ///
+  /// [roi] is the face box in NORMALIZED `[0,1]` coordinates of the upright
+  /// frame `{left, top, width, height}`; pass null to classify the whole frame.
+  /// Returns `P(sunglasses)` in `[0,1]` (0 when nothing scored / decode failed).
+  Future<double> classifyGlasses(
+    FrameData frame, {
+    Map<String, double>? roi,
+  }) async {
+    final args = _encodeFrame(frame);
+    if (roi != null) args['roi'] = roi;
+    final proba = await _channel.invokeMethod<double>('classifyGlasses', args);
+    return proba ?? 0;
+  }
+
   /// Decodes [frame] into upright RGBA8888 + dimensions via native.
   ///
   /// Returns `{bytes: Uint8List, width: int, height: int}` on success, or null

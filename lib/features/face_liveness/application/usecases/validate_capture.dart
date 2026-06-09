@@ -5,11 +5,14 @@ import 'package:flutter/foundation.dart';
 import '../../domain/entities/eye_occlusion_evidence.dart';
 import '../../domain/entities/frame_data.dart';
 import '../../domain/entities/frame_metadata.dart';
+import '../../domain/entities/glasses_evidence.dart';
 import '../../domain/entities/hand_snapshot.dart';
 import '../../domain/failures/liveness_failure.dart';
 import '../../domain/repositories/eye_contour_analyzer.dart';
 import '../../domain/repositories/face_landmarker_analyzer.dart';
+import '../../domain/repositories/glasses_classifier_analyzer.dart';
 import '../../domain/repositories/hand_analyzer.dart';
+import '../../domain/value_objects/rect2d.dart';
 import '../../infrastructure/mediapipe/mediapipe_face_detection_analyzer.dart';
 import 'check_no_eye_occlusion.dart';
 import 'post_capture_checks.dart';
@@ -44,6 +47,10 @@ class CaptureValidationResult {
   /// the check was skipped or no face was found by the contour detector).
   final EyeOcclusionEvidence? eyeEvidence;
 
+  /// Output of the TFLite sunglasses classifier (null when the check was
+  /// skipped or the model errored).
+  final GlassesEvidence? glassesEvidence;
+
   const CaptureValidationResult({
     this.faceScore,
     this.failure,
@@ -53,6 +60,7 @@ class CaptureValidationResult {
     this.handsDetected = 0,
     this.frameMeta,
     this.eyeEvidence,
+    this.glassesEvidence,
   });
 
   bool get passed => failure == null;
@@ -74,6 +82,7 @@ class ValidateCapture {
   final FaceLandmarkerAnalyzer _faceLandmarkerAnalyzer;
   final EyeContourAnalyzer _eyeContourAnalyzer;
   final CheckNoEyeOcclusion _eyeOcclusionCheck;
+  final GlassesClassifierAnalyzer _glassesAnalyzer;
 
   const ValidateCapture({
     required MediaPipeFaceDetectionAnalyzer faceAnalyzer,
@@ -81,11 +90,13 @@ class ValidateCapture {
     required FaceLandmarkerAnalyzer faceLandmarkerAnalyzer,
     required EyeContourAnalyzer eyeContourAnalyzer,
     required CheckNoEyeOcclusion eyeOcclusionCheck,
+    required GlassesClassifierAnalyzer glassesAnalyzer,
   })  : _faceAnalyzer = faceAnalyzer,
         _handAnalyzer = handAnalyzer,
         _faceLandmarkerAnalyzer = faceLandmarkerAnalyzer,
         _eyeContourAnalyzer = eyeContourAnalyzer,
-        _eyeOcclusionCheck = eyeOcclusionCheck;
+        _eyeOcclusionCheck = eyeOcclusionCheck,
+        _glassesAnalyzer = glassesAnalyzer;
 
   Future<CaptureValidationResult> call(
     FrameData frame, {
@@ -105,6 +116,9 @@ class ValidateCapture {
     var facesDetected = 0;
     double? bestPassing;
     double? bestAny;
+    // Bounding box of the highest-scoring face — used to crop the glasses
+    // classifier's input. null when no face was detected.
+    Rect2D? bestFaceBox;
 
     if (faceResult != null) {
       if (faceResult.isErr) {
@@ -117,6 +131,11 @@ class ValidateCapture {
       allScores = faces.map((f) => f.score.value).toList();
       facesDetected = faces.length;
       bestAny = faces.isEmpty ? null : allScores.reduce(math.max);
+      if (faces.isNotEmpty) {
+        final top = faces.reduce(
+            (a, b) => a.score.value >= b.score.value ? a : b);
+        bestFaceBox = top.boundingBox;
+      }
       final passing =
           faces.where((f) => f.score.value >= thresholds.faceScore).toList();
       bestPassing = passing.isEmpty
@@ -165,6 +184,31 @@ class ValidateCapture {
 
     // TODO: FaceLandmarker occlusion check temporarily disabled.
 
+    // --- Sunglasses classifier (TFLite) ---
+    // Best-effort like the eye-occlusion check: a model error skips the check
+    // rather than blocking a clean capture. More robust than the pixel-stat
+    // path below (see docs/glasses_classifier_compare.jpg).
+    GlassesEvidence? glassesEvidence;
+    if (checks.glassesEnabled) {
+      final glassesResult =
+          await _glassesAnalyzer.analyze(frame, faceBox: bestFaceBox);
+      if (glassesResult.isOk) {
+        glassesEvidence = glassesResult.okOrNull;
+        if (glassesEvidence != null && glassesEvidence.isWearingSunglasses) {
+          return CaptureValidationResult(
+            faceScore: bestPassing,
+            failure: LivenessFailure.eyeOccluded,
+            faceScores: allScores,
+            facesDetected: facesDetected,
+            frameMeta: meta,
+            glassesEvidence: glassesEvidence,
+          );
+        }
+      } else {
+        debugPrint('[Glasses] skipped: ${glassesResult.errOrNull}');
+      }
+    }
+
     // --- Eye-occlusion pixel analysis ---
     // Failures here are best-effort: if ML Kit can't find the face or errors out,
     // we skip rather than blocking a clean capture on an analyzer hiccup.
@@ -195,6 +239,7 @@ class ValidateCapture {
             facesDetected: facesDetected,
             frameMeta: meta,
             eyeEvidence: eyeEvidence,
+            glassesEvidence: glassesEvidence,
           );
         }
       }
@@ -206,6 +251,7 @@ class ValidateCapture {
       facesDetected: facesDetected,
       frameMeta: meta,
       eyeEvidence: eyeEvidence,
+      glassesEvidence: glassesEvidence,
     );
   }
 }

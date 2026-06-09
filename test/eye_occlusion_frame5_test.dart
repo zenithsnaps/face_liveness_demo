@@ -189,17 +189,15 @@ Future<void> main() async {
       reason: 'L/R stdDev should be symmetric when both ROIs land on lens',
     );
 
-    // With stdDev signal disabled (per user request — human eye texture is
-    // too noisy to be a reliable signal) and the current relaxed sat=130:
-    //   Lum 0.66 > lumRatioPass=0.55 → 0
-    //   Sat 122 < saturationPass=130 → +0.15 (pass bucket)
-    //   stdDev disabled → +0.00
-    // combinedScore = 0.15 → below blockScore=0.30 → NOT occluded.
-    // This frame's warm-tinted sunglasses are now under-flagged; catching
-    // them would require either relaxing lumRatioPass (risks false-positives
-    // on natural eye shadow) or adding a different color signal (e.g. sat
-    // delta vs cheek, or hue similarity).
-    expect(evidence.combinedScore, closeTo(0.15, 0.01));
+    // With production-default thresholds (lum 0.55, std 15, sat 20, block
+    // 0.30) the warm-tinted reflective sunglasses in this frame produce:
+    //   Lum 0.66 > 0.55 → 0
+    //   Std 50  > 15   → 0
+    //   Sat 122 > 20   → 0
+    // → combinedScore = 0.00, NOT blocked. The pixel-stat algorithm does
+    // not catch this image's tinted lens; a different signal (e.g. ML Kit
+    // eye-open probability, eye-contour ROI) is the planned next step.
+    expect(evidence.combinedScore, closeTo(0.0, 0.01));
     expect(evidence.occluded, isFalse);
   });
 }

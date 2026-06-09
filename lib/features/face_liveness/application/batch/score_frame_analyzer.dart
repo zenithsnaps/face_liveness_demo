@@ -1,10 +1,13 @@
 import 'dart:io' show Platform;
 import 'dart:math' as math;
-import 'dart:typed_data';
+
+import 'package:flutter/foundation.dart';
 
 import '../../domain/entities/face_detection.dart';
 import '../../domain/entities/frame_data.dart';
 import '../../domain/entities/frame_metadata.dart';
+import '../../domain/entities/glasses_evidence.dart';
+import '../../domain/repositories/glasses_classifier_analyzer.dart';
 import '../../domain/repositories/hand_analyzer.dart';
 import '../../domain/value_objects/rect2d.dart';
 import '../../infrastructure/mediapipe/mediapipe_face_detection_analyzer.dart';
@@ -31,14 +34,17 @@ class ScoreFrameAnalyzer {
   final MediaPipeChannel _channel;
   final MediaPipeFaceDetectionAnalyzer _face;
   final HandAnalyzer _hand;
+  final GlassesClassifierAnalyzer? _glasses;
 
   ScoreFrameAnalyzer({
     required MediaPipeChannel channel,
     required MediaPipeFaceDetectionAnalyzer face,
     required HandAnalyzer hand,
+    GlassesClassifierAnalyzer? glasses,
   })  : _channel = channel,
         _face = face,
-        _hand = hand;
+        _hand = hand,
+        _glasses = glasses;
 
   /// [mlKitFaceBox], when supplied, is preferred over MediaPipe's face bbox
   /// for the eye-occlusion ROI geometry. ML Kit returns a tighter face box
@@ -121,12 +127,28 @@ class ScoreFrameAnalyzer {
       sunglassesScore = evidence.combinedScore;
     }
 
+    // On-device TFLite sunglasses classifier (best-effort: a model error
+    // leaves glassesEvidence null rather than dropping the frame). Runs on the
+    // same upright frame + face box the pixel analysis used.
+    GlassesEvidence? glassesEvidence;
+    if (_glasses != null && occlusionBox != null) {
+      final glassesResult =
+          await _glasses.analyze(upright, faceBox: occlusionBox);
+      glassesEvidence = glassesResult.okOrNull;
+      if (glassesResult.isErr) {
+        debugPrint('[Glasses] skipped: ${glassesResult.errOrNull}');
+      } else {
+        debugPrint('[Glasses] $glassesEvidence');
+      }
+    }
+
     return ScoreFrame(
       faceScore: faceScore,
       handScore: handScore,
       handCount: handCount,
       sunglassesScore: sunglassesScore,
       eyeEvidence: evidence,
+      glassesEvidence: glassesEvidence,
       // Keep the *original* sensor-orientation frame for JPEG encoding —
       // native FrameDecoder.decodeUprightBitmap will rotate it correctly in a
       // single pass. Re-encoding the already-rotated RGBA via two round-trips

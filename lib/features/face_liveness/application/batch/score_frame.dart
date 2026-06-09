@@ -2,6 +2,7 @@ import 'package:meta/meta.dart';
 
 import '../../domain/entities/eye_occlusion_evidence.dart';
 import '../../domain/entities/frame_data.dart';
+import '../../domain/entities/glasses_evidence.dart';
 
 /// One frame's worth of pre-capture scores plus the upright RGBA frame to be
 /// saved when this frame wins the batch.
@@ -30,6 +31,11 @@ class ScoreFrame {
   /// so threshold tuning UIs continue to work.
   final EyeOcclusionEvidence? eyeEvidence;
 
+  /// On-device TFLite sunglasses classifier output (null when the model errored
+  /// or no face box was available). More robust than [eyeEvidence]; see
+  /// docs/glasses_classifier_compare.jpg.
+  final GlassesEvidence? glassesEvidence;
+
   /// Original sensor-orientation frame. Held only long enough to encode the
   /// JPEG and recycle.
   final FrameData frame;
@@ -41,5 +47,6 @@ class ScoreFrame {
     required this.sunglassesScore,
     required this.eyeEvidence,
     required this.frame,
+    this.glassesEvidence,
   });
 }
