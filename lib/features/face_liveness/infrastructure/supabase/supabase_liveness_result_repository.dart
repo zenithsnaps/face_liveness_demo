@@ -8,6 +8,7 @@ import '../../../../core/app_constants.dart';
 import '../../application/usecases/post_capture_checks.dart';
 import '../../domain/entities/attempt_record.dart';
 import '../../domain/entities/eye_occlusion_evidence.dart';
+import '../../domain/entities/glasses_evidence.dart';
 import '../../domain/repositories/liveness_result_repository.dart';
 import '../../presentation/coordinators/batch_capture_coordinator.dart';
 
@@ -87,9 +88,10 @@ class SupabaseLivenessResultRepository implements LivenessResultRepository {
         'summary_bytes': bytes.length,
         'summary_width': meta.width,
         'summary_height': meta.height,
-        'occlusion_check': checks.eyeOcclusionEnabled
-            ? _buildOcclusionCheck(score.eyeEvidence)
-            : null,
+        'occlusion_check': _buildOcclusionCheck(
+          checks.eyeOcclusionEnabled ? score.eyeEvidence : null,
+          checks.glassesEnabled ? score.glassesEvidence : null,
+        ),
         'test_case': ?testCase,
         'tester_name': ?testerName,
         if (device.platform.isNotEmpty) 'platform': device.platform,
@@ -175,25 +177,42 @@ class SupabaseLivenessResultRepository implements LivenessResultRepository {
     );
   }
 
-  Map<String, dynamic>? _buildOcclusionCheck(EyeOcclusionEvidence? eye) {
-    if (eye == null) return null;
-    return {
-      'evaluated': true,
-      'occluded': eye.occluded,
-      'combined_score': eye.combinedScore,
-      'reference_luminance': eye.referenceLuminance,
-      'left': {
-        'lum_ratio': eye.leftLumRatio,
-        'std_dev': eye.leftStdDev,
-        'saturation': eye.leftSaturation,
-        'score': eye.leftScore,
-      },
-      'right': {
-        'lum_ratio': eye.rightLumRatio,
-        'std_dev': eye.rightStdDev,
-        'saturation': eye.rightSaturation,
-        'score': eye.rightScore,
-      },
-    };
+  Map<String, dynamic>? _buildOcclusionCheck(
+    EyeOcclusionEvidence? eye,
+    GlassesEvidence? glasses,
+  ) {
+    if (eye == null && glasses == null) return null;
+    final map = <String, dynamic>{};
+    if (eye != null) {
+      map.addAll({
+        'evaluated': true,
+        'occluded': eye.occluded,
+        'combined_score': eye.combinedScore,
+        'reference_luminance': eye.referenceLuminance,
+        'left': {
+          'lum_ratio': eye.leftLumRatio,
+          'std_dev': eye.leftStdDev,
+          'saturation': eye.leftSaturation,
+          'score': eye.leftScore,
+        },
+        'right': {
+          'lum_ratio': eye.rightLumRatio,
+          'std_dev': eye.rightStdDev,
+          'saturation': eye.rightSaturation,
+          'score': eye.rightScore,
+        },
+      });
+    }
+    // TFLite sunglasses classifier — rides inside the same jsonb column so no
+    // schema migration is needed to start collecting it.
+    if (glasses != null) {
+      map['glasses'] = {
+        'evaluated': true,
+        'sunglasses_proba': glasses.sunglassesProba,
+        'threshold': glasses.threshold,
+        'blocked': glasses.isWearingSunglasses,
+      };
+    }
+    return map;
   }
 }

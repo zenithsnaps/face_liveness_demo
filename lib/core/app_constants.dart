@@ -10,9 +10,9 @@ class AppConstants {
   static const double eyeOpenThreshold = 0.7;
 
   // Gate 2 — face fills frame (ratios of oval guide width)
-  static const double faceBboxMinRatio = 0.80; // below → "ขยับเข้าใกล้กล้อง"
-  static const double faceBboxTargetRatio = 0.90; // minimum to pass
-  static const double faceBboxMaxRatio = 0.98; // above → "ขยับออกเล็กน้อย"
+  static const double faceBboxMinRatio = 0.72; // below → "ขยับเข้าใกล้กล้อง"
+  static const double faceBboxTargetRatio = 0.81; // minimum to pass
+  static const double faceBboxMaxRatio = 1.08; // above → "ขยับออกเล็กน้อย"
   static const double faceQualityEyeOpenMinThreshold = 0.7;
 
   // Gate 3 — object occlusion
@@ -63,9 +63,9 @@ class AppConstants {
   static const double preCaptureHandBlockThreshold = 0.10;
 
   // Head pose (for "look straight")
-  static const double headPoseMaxYawDegrees = 15.0;
-  static const double headPoseMaxPitchDegrees = 15.0;
-  static const double headPoseMaxRollDegrees = 15.0;
+  static const double headPoseMaxYawDegrees = 16.5;
+  static const double headPoseMaxPitchDegrees = 16.5;
+  static const double headPoseMaxRollDegrees = 16.5;
 
   // MediaPipe platform channel
   static const String mediaPipeChannelName = 'app.mymo/mediapipe';
@@ -76,4 +76,18 @@ class AppConstants {
   // Face landmarker (post-capture occlusion check)
   static const String faceLandmarkerModelAsset = 'assets/models/face_landmarker.task';
   static const double faceLandmarkerMinDetectionConfidence = 0.5;
+
+  // Sunglasses classifier (TFLite, TinyBinaryClassifier, NCHW 1x3x256x256,
+  // /255 + ImageNet-norm + sigmoid baked in -> output is P(sunglasses)).
+  // Threshold tuned on real Thai funnel data (184-frame sweep): 0.70 gave the
+  // best F1 (0.88) — recall 84%, FPR 2.2% — minimising false-blocks on users
+  // wearing CLEAR prescription glasses (allowed to pass per TH face-recognition
+  // rules). See tools/glasses_export/eval_funnel.py.
+  static const String glassesModelAsset = 'assets/models/glasses_sunglasses.tflite';
+  static const int glassesInputSize = 256;
+  static const double glassesBlockThreshold = 0.7;
+  // Face crop is expanded by this factor before inference so the lenses +
+  // surrounding context (brows/temples) are included, matching the
+  // head-and-shoulders framing the model was validated on.
+  static const double glassesFaceCropMargin = 0.6;
 }

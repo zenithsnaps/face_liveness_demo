@@ -118,7 +118,27 @@ class _ResultScreenState extends ConsumerState<ResultScreen> {
     final faceMax = widget.session.faceMaxFrame;
 
     return Scaffold(
-      appBar: AppBar(title: const Text(AppStrings.verificationSuccess)),
+      appBar: AppBar(
+        title: const Text(AppStrings.verificationSuccess),
+        bottom: widget.testCase != null
+            ? PreferredSize(
+                preferredSize: const Size.fromHeight(28),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 6),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.label_outline, size: 13),
+                      const SizedBox(width: 4),
+                      Text(
+                        widget.testCase!,
+                        style: const TextStyle(fontSize: 13),
+                      ),
+                    ],
+                  ),
+                ),
+              )
+            : null,
+      ),
       bottomNavigationBar: SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
@@ -402,6 +422,13 @@ class _FrameRow extends StatelessWidget {
                   const SizedBox(height: 4),
                   _EyeEvidenceMini(evidence: score.eyeEvidence!),
                 ],
+                _MetricLine(
+                  label: 'Sunglasses (TFLite)',
+                  value: score.glassesEvidence != null
+                      ? 'P=${score.glassesEvidence!.sunglassesProba.toStringAsFixed(2)}'
+                      : '—',
+                  emphasize: score.glassesEvidence?.isWearingSunglasses ?? false,
+                ),
               ],
             ),
           ),

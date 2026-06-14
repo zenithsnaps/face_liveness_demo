@@ -1,0 +1,21 @@
+CSV: FR_20260513_บ่าย_Clean(liveness_attempts_2026-05-12_to).csv
+Total rows:            4430
+Succeeded:             4421
+Failed after pass 1:   9
+Recovered on retry:    0
+Still failed:          9
+
+glasses_blocked TRUE:  471
+glasses_blocked FALSE: 3950
+face_found FALSE:      913
+
+STILL-FAILED ROWS (id | reason | summary_path):
+  b66b5036-5357-429b-a55c-7911991f1257 | no_url | 
+  c88a741b-7553-404e-ba09-fa451a4ff248 | no_url | 
+  54b437ed-b4ff-4378-9e01-3da28a0e623c | no_url | 
+  a451728b-0b87-4ef9-8493-952e64dd213b | no_url | 
+  d641b30e-48a0-48d7-9aaf-cdcae8412373 | no_url | 
+  281e5052-ebc5-45b1-95a3-507657e61f66 | no_url | 
+  9db89159-30f2-4eef-adc9-73924d54a3ce | no_url | 
+  f8a2c27b-5310-419f-8a95-c1db3e5cd3b1 | no_url | 
+  a1332d8f-2bac-4419-983c-debfa45fa80d | no_url | 

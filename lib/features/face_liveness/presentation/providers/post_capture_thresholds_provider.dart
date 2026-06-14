@@ -11,6 +11,8 @@ class PostCaptureThresholdsController
   void setHandConfidence(double v) => state = state.copyWith(handConfidence: v);
   void setLandmarkVisibility(double v) =>
       state = state.copyWith(landmarkVisibility: v);
+  void setGlassesThreshold(double v) =>
+      state = state.copyWith(glassesThreshold: v);
 }
 
 final postCaptureThresholdsProvider = NotifierProvider<

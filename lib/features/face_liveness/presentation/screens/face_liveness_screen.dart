@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
@@ -132,8 +133,12 @@ class _FaceLivenessScreenState extends ConsumerState<FaceLivenessScreen>
     FaceSnapshot? face;
     faceResult.fold((value) => face = value, (_) {});
 
+    // iOS bytes are already portrait (AVFoundation pre-rotates), so treat
+    // rotation as 0 — same override used in score_frame_analyzer.
+    final effectiveRotation =
+        Platform.isIOS ? 0 : frame.metadata.rotationDegrees;
     final ovalGuide = _ovalGuideInFrameSpace(
-        image.width, image.height, frame.metadata.rotationDegrees);
+        image.width, image.height, effectiveRotation);
     final input = PipelineFrameInput(
       face: face,
       hands: const [],
@@ -150,13 +155,7 @@ class _FaceLivenessScreenState extends ConsumerState<FaceLivenessScreen>
     final controller = ref.read(flowControllerProvider.notifier);
     controller.dispatch(FrameAnalyzed(outcome));
 
-    final coordinator = ref.read(batchCaptureCoordinatorProvider);
-    if (!outcome.didPass) {
-      // Geometry failed → drop the in-progress batch; the user moved or the
-      // face quality dropped, so previously buffered scores are stale.
-      coordinator.reset();
-      return;
-    }
+    if (!outcome.didPass) return;
 
     // Stage B — score the frame on 3 analyzers in parallel.
     // Pass ML Kit's face bbox into the analyzer because it is tighter than
@@ -178,6 +177,7 @@ class _FaceLivenessScreenState extends ConsumerState<FaceLivenessScreen>
     // Stage C — admit into the session (encodes JPEG inline). The session
     // fills up over time as the geometry gate keeps passing; once full, we
     // navigate to the result screen.
+    final coordinator = ref.read(batchCaptureCoordinatorProvider);
     final targetSize = ref.read(captureFrameCountProvider);
     final batchOutcome = await coordinator.admit(scored, targetSize);
     if (!mounted) return;
@@ -237,8 +237,17 @@ class _FaceLivenessScreenState extends ConsumerState<FaceLivenessScreen>
     final bool rotated = rotationDegrees == 90 || rotationDegrees == 270;
     final w = frameWidth * (rotated ? 0.55 : 0.70);
     final h = frameHeight * (rotated ? 0.70 : 0.55);
-    final left = (frameWidth - w) / 2;
-    final top = (frameHeight - h) / 2 - frameHeight * 0.05;
+    // Shift the oval 5% of screen height above centre so it matches where the
+    // face naturally sits in a selfie.
+    //
+    // iOS: frame bytes are already portrait (AVFoundation pre-rotates), so
+    //   frame Y == screen Y → apply the offset to `top`.
+    // Android: frame bytes are landscape (raw sensor), so frame X == screen Y
+    //   and frame Y == screen X → apply the offset to `left` instead.
+    //   (Decreasing frame-X moves the oval upward on screen for both 90° and
+    //   270° sensor orientations.)
+    final left = (frameWidth - w) / 2 - (rotated ? frameWidth * 0.05 : 0.0);
+    final top = (frameHeight - h) / 2 - (rotated ? 0.0 : frameHeight * 0.05);
     return Rect2D.fromLTWH(left, top, w, h);
   }
 
@@ -343,7 +352,9 @@ class _FaceLivenessScreenState extends ConsumerState<FaceLivenessScreen>
   OvalStatus _ovalStatus(LivenessFlowState s) => switch (s) {
         FlowIdle _ => OvalStatus.neutral,
         FlowInitializing _ => OvalStatus.working,
-        FlowEvaluating e => e.lastFailure != null ? OvalStatus.failure : OvalStatus.working,
+        FlowEvaluating e => e.lastFailure != null && e.lastFailure != LivenessFailure.noFace
+            ? OvalStatus.failure
+            : OvalStatus.working,
         FlowCapturing _ => OvalStatus.success,
         FlowDone _ => OvalStatus.success,
         FlowFailed _ => OvalStatus.failure,
@@ -353,7 +364,8 @@ class _FaceLivenessScreenState extends ConsumerState<FaceLivenessScreen>
     return switch (s) {
       FlowIdle _ => AppStrings.preparing,
       FlowInitializing _ => AppStrings.preparing,
-      FlowEvaluating e when e.lastFailure != null => e.lastFailure!.thaiMessage,
+      FlowEvaluating e when e.lastFailure != null && e.lastFailure != LivenessFailure.noFace =>
+        e.lastFailure!.thaiMessage,
       FlowEvaluating e => _defaultPromptFor(e.gate),
       FlowCapturing _ => AppStrings.verifying,
       FlowDone _ => AppStrings.verificationSuccess,

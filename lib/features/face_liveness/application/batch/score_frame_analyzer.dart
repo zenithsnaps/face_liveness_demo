@@ -1,10 +1,13 @@
 import 'dart:io' show Platform;
 import 'dart:math' as math;
-import 'dart:typed_data';
+
+import 'package:flutter/foundation.dart';
 
 import '../../domain/entities/face_detection.dart';
 import '../../domain/entities/frame_data.dart';
 import '../../domain/entities/frame_metadata.dart';
+import '../../domain/entities/glasses_evidence.dart';
+import '../../domain/repositories/glasses_classifier_analyzer.dart';
 import '../../domain/repositories/hand_analyzer.dart';
 import '../../domain/value_objects/rect2d.dart';
 import '../../infrastructure/mediapipe/mediapipe_face_detection_analyzer.dart';
@@ -31,14 +34,17 @@ class ScoreFrameAnalyzer {
   final MediaPipeChannel _channel;
   final MediaPipeFaceDetectionAnalyzer _face;
   final HandAnalyzer _hand;
+  final GlassesClassifierAnalyzer? _glasses;
 
   ScoreFrameAnalyzer({
     required MediaPipeChannel channel,
     required MediaPipeFaceDetectionAnalyzer face,
     required HandAnalyzer hand,
+    GlassesClassifierAnalyzer? glasses,
   })  : _channel = channel,
         _face = face,
-        _hand = hand;
+        _hand = hand,
+        _glasses = glasses;
 
   /// [mlKitFaceBox], when supplied, is preferred over MediaPipe's face bbox
   /// for the eye-occlusion ROI geometry. ML Kit returns a tighter face box
@@ -101,20 +107,14 @@ class ScoreFrameAnalyzer {
         .where((h) => h.confidence.value >= thresholds.handBlockThreshold)
         .length;
 
-    // ML Kit returns its bbox in `streamFrame`'s coord space (the raw buffer
-    // sent in via InputImage.fromBytes). On iOS the buffer is already
-    // display-upright (analysisFrame.rotationDegrees=0), so no transform; on
-    // Android the buffer is sensor-orientation landscape, so the bbox needs
-    // to be rotated by the same `sensorOrientation` we apply to the bitmap
-    // to align with our `upright` portrait frame.
-    final occlusionBox = mlKitFaceBox != null
-        ? _rotateBox(
-            mlKitFaceBox,
-            analysisFrame.rotationDegrees,
-            streamFrame.width,
-            streamFrame.height,
-          )
-        : bestFace?.boundingBox;
+    // ML Kit returns face.boundingBox in display-upright (rotation-corrected)
+    // coordinates because InputImageConverter always passes a non-zero
+    // InputImageRotation when building the InputImage — ML Kit then virtually
+    // rotates the buffer and reports the bbox against the upright image.
+    // bestFace?.boundingBox is also upright-relative because MediaPipe runs on
+    // the `upright` frame above. Both already match the coord space that
+    // EyeOcclusionUtil reads pixels from, so no transform is needed.
+    final occlusionBox = mlKitFaceBox ?? bestFace?.boundingBox;
     double sunglassesScore = 0.0;
     var evidence = occlusionBox != null
         ? EyeOcclusionUtil.detect(
@@ -127,12 +127,28 @@ class ScoreFrameAnalyzer {
       sunglassesScore = evidence.combinedScore;
     }
 
+    // On-device TFLite sunglasses classifier (best-effort: a model error
+    // leaves glassesEvidence null rather than dropping the frame). Runs on the
+    // same upright frame + face box the pixel analysis used.
+    GlassesEvidence? glassesEvidence;
+    if (_glasses != null && occlusionBox != null) {
+      final glassesResult =
+          await _glasses.analyze(upright, faceBox: occlusionBox);
+      glassesEvidence = glassesResult.okOrNull;
+      if (glassesResult.isErr) {
+        debugPrint('[Glasses] skipped: ${glassesResult.errOrNull}');
+      } else {
+        debugPrint('[Glasses] $glassesEvidence');
+      }
+    }
+
     return ScoreFrame(
       faceScore: faceScore,
       handScore: handScore,
       handCount: handCount,
       sunglassesScore: sunglassesScore,
       eyeEvidence: evidence,
+      glassesEvidence: glassesEvidence,
       // Keep the *original* sensor-orientation frame for JPEG encoding —
       // native FrameDecoder.decodeUprightBitmap will rotate it correctly in a
       // single pass. Re-encoding the already-rotated RGBA via two round-trips
@@ -141,42 +157,6 @@ class ScoreFrameAnalyzer {
       // still correct; we just don't persist it on the slot.
       frame: streamFrame,
     );
-  }
-
-  /// Rotates [box] from the source-buffer coord space (size [srcW] × [srcH])
-  /// into a coord space rotated `rotation` degrees clockwise. Matches the
-  /// rotation applied by `FrameDecoder.decodeUprightBitmap` on native, so a
-  /// bbox emitted from ML Kit (against the original buffer) ends up in the
-  /// same coord system as our upright RGBA frame.
-  Rect2D _rotateBox(Rect2D box, int rotation, int srcW, int srcH) {
-    switch (rotation % 360) {
-      case 90:
-        // (x, y) → (srcH - y, x)
-        return Rect2D.fromLTRB(
-          (srcH - box.bottom).toDouble(),
-          box.left,
-          (srcH - box.top).toDouble(),
-          box.right,
-        );
-      case 180:
-        return Rect2D.fromLTRB(
-          (srcW - box.right).toDouble(),
-          (srcH - box.bottom).toDouble(),
-          (srcW - box.left).toDouble(),
-          (srcH - box.top).toDouble(),
-        );
-      case 270:
-        // (x, y) → (y, srcW - x)
-        return Rect2D.fromLTRB(
-          box.top,
-          (srcW - box.right).toDouble(),
-          box.bottom,
-          (srcW - box.left).toDouble(),
-        );
-      case 0:
-      default:
-        return box;
-    }
   }
 
   Future<FrameData?> _toUpright(FrameData frame) async {

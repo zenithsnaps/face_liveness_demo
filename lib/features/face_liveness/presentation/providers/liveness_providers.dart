@@ -18,6 +18,7 @@ import '../../application/usecases/validate_capture.dart';
 import '../../domain/entities/attempt_draft.dart';
 import '../../domain/repositories/eye_contour_analyzer.dart';
 import '../../domain/repositories/face_analyzer.dart';
+import '../../domain/repositories/glasses_classifier_analyzer.dart';
 import '../../domain/repositories/hand_analyzer.dart';
 import '../../domain/repositories/liveness_result_repository.dart';
 import '../../domain/repositories/object_analyzer.dart';
@@ -26,6 +27,7 @@ import '../../infrastructure/camera/input_image_converter.dart';
 import '../../infrastructure/image/frame_jpeg_encoder.dart';
 import '../../infrastructure/mediapipe/mediapipe_face_detection_analyzer.dart';
 import '../../infrastructure/mediapipe/mediapipe_face_landmarker_analyzer.dart';
+import '../../infrastructure/mediapipe/mediapipe_glasses_classifier_analyzer.dart';
 import '../../infrastructure/mediapipe/mediapipe_hand_analyzer.dart';
 import '../../infrastructure/mediapipe/mediapipe_object_analyzer.dart';
 import '../../infrastructure/mlkit/mlkit_eye_contour_analyzer.dart';
@@ -33,6 +35,7 @@ import '../../infrastructure/mlkit/mlkit_face_analyzer.dart';
 import '../../infrastructure/platform_channels/mediapipe_channel.dart';
 import '../../infrastructure/supabase/supabase_liveness_result_repository.dart';
 import '../coordinators/batch_capture_coordinator.dart';
+import 'post_capture_thresholds_provider.dart';
 
 /// Camera source (singleton per session).
 final cameraSourceProvider = Provider<CameraFrameSource>((ref) {
@@ -84,6 +87,26 @@ final eyeContourAnalyzerProvider = Provider<EyeContourAnalyzer>((ref) {
   return analyzer;
 });
 
+final glassesClassifierAnalyzerProvider =
+    Provider<GlassesClassifierAnalyzer>((ref) {
+  // Runs through MediaPipe's own ImageClassifier (shared embedded TFLite), so
+  // it links cleanly alongside the hand/face tasks — unlike tflite_flutter,
+  // which collided with MediaPipe's TFLite on iOS (duplicate symbols).
+  // Requires the MediaPipe-shaped model (NHWC + metadata); see
+  // tools/glasses_export/README.md.
+  // Threshold is user-tunable on the home screen — watch it so the analyzer
+  // (and the GlassesEvidence it stamps) reflects the live value.
+  final threshold = ref.watch(
+    postCaptureThresholdsProvider.select((t) => t.glassesThreshold),
+  );
+  final analyzer = MediaPipeGlassesClassifierAnalyzer(
+    ref.read(mediaPipeChannelProvider),
+    threshold: threshold,
+  );
+  ref.onDispose(analyzer.dispose);
+  return analyzer;
+});
+
 final validateCaptureProvider = Provider<ValidateCapture>((ref) {
   return ValidateCapture(
     faceAnalyzer: ref.read(faceDetectionAnalyzerProvider),
@@ -91,6 +114,9 @@ final validateCaptureProvider = Provider<ValidateCapture>((ref) {
     faceLandmarkerAnalyzer: ref.read(faceLandmarkerAnalyzerProvider),
     eyeContourAnalyzer: ref.read(eyeContourAnalyzerProvider),
     eyeOcclusionCheck: const CheckNoEyeOcclusion(),
+    // watch: rebuild when the glasses threshold changes so the analyzer carries
+    // the live value.
+    glassesAnalyzer: ref.watch(glassesClassifierAnalyzerProvider),
   );
 });
 
@@ -112,6 +138,9 @@ final scoreFrameAnalyzerProvider = Provider<ScoreFrameAnalyzer>((ref) {
     channel: ref.read(mediaPipeChannelProvider),
     face: ref.read(faceDetectionAnalyzerProvider),
     hand: ref.read(handAnalyzerProvider),
+    // watch: rebuild when the glasses threshold changes so the per-frame
+    // GlassesEvidence (and result-screen emphasis) uses the live value.
+    glasses: ref.watch(glassesClassifierAnalyzerProvider),
   );
 });
 

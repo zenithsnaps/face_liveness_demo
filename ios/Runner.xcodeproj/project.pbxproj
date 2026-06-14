@@ -13,6 +13,8 @@
 		6380533F7AC3EFBA88FC7EB6 /* Pods_Runner.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3450360ED38F7D7AE13C613C /* Pods_Runner.framework */; };
 		74858FAF1ED2DC5600515810 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74858FAE1ED2DC5600515810 /* AppDelegate.swift */; };
 		75433B2B996BC715C670D318 /* Pods_RunnerTests.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3DB753D6DF92375670085FDC /* Pods_RunnerTests.framework */; };
+		8B0FA0D62FD6CBF200B6CA43 /* GlassesClassifierBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B0FA0D52FD6CBF200B6CA43 /* GlassesClassifierBridge.swift */; };
+		8B0FA0D82FD6CC1E00B6CA43 /* glasses_sunglasses.tflite in Resources */ = {isa = PBXBuildFile; fileRef = 8B0FA0D72FD6CC1E00B6CA43 /* glasses_sunglasses.tflite */; };
 		8BA5AAFE2F978EF200511ED2 /* MediaPipePlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BA5AAFB2F978EF200511ED2 /* MediaPipePlugin.swift */; };
 		8BA5AAFF2F978EF200511ED2 /* ObjectAnalyzerBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BA5AAFC2F978EF200511ED2 /* ObjectAnalyzerBridge.swift */; };
 		8BA5AB002F978EF200511ED2 /* HandAnalyzerBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BA5AAFA2F978EF200511ED2 /* HandAnalyzerBridge.swift */; };
@@ -21,13 +23,13 @@
 		8BA5AB052F978F3A00511ED2 /* efficientdet_lite0.tflite in Resources */ = {isa = PBXBuildFile; fileRef = 8BA5AB022F978F3A00511ED2 /* efficientdet_lite0.tflite */; };
 		8BA5AB062F97903500511ED2 /* blaze_face_short_range.tflite in Resources */ = {isa = PBXBuildFile; fileRef = 8BA5AB052F97903500511ED2 /* blaze_face_short_range.tflite */; };
 		8BA5AB072F97903500511ED2 /* FaceDetectorBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BA5AB082F97903500511ED2 /* FaceDetectorBridge.swift */; };
-		8BA5AB0A2F97903500511ED2 /* FaceLandmarkerBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BA5AB092F97903500511ED2 /* FaceLandmarkerBridge.swift */; };
-		9A0001122F978EF200511ED2 /* JpegEncoderBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A0001112F978EF200511ED2 /* JpegEncoderBridge.swift */; };
-		9A0001142F978EF200511ED2 /* UprightRgbaBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A0001132F978EF200511ED2 /* UprightRgbaBridge.swift */; };
 		8BA5AB072F9932CF00511ED2 /* face_landmarker.task in Resources */ = {isa = PBXBuildFile; fileRef = 8BA5AB062F9932CF00511ED2 /* face_landmarker.task */; };
+		8BA5AB0A2F97903500511ED2 /* FaceLandmarkerBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BA5AB092F97903500511ED2 /* FaceLandmarkerBridge.swift */; };
 		97C146FC1CF9000F007C117D /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FA1CF9000F007C117D /* Main.storyboard */; };
 		97C146FE1CF9000F007C117D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FD1CF9000F007C117D /* Assets.xcassets */; };
 		97C147011CF9000F007C117D /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FF1CF9000F007C117D /* LaunchScreen.storyboard */; };
+		9A0001122F978EF200511ED2 /* JpegEncoderBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A0001112F978EF200511ED2 /* JpegEncoderBridge.swift */; };
+		9A0001142F978EF200511ED2 /* UprightRgbaBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A0001132F978EF200511ED2 /* UprightRgbaBridge.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -67,6 +69,8 @@
 		74858FAD1ED2DC5600515810 /* Runner-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "Runner-Bridging-Header.h"; sourceTree = "<group>"; };
 		74858FAE1ED2DC5600515810 /* AppDelegate.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		7AFA3C8E1D35360C0083082E /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = Release.xcconfig; path = Flutter/Release.xcconfig; sourceTree = "<group>"; };
+		8B0FA0D52FD6CBF200B6CA43 /* GlassesClassifierBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassesClassifierBridge.swift; sourceTree = "<group>"; };
+		8B0FA0D72FD6CC1E00B6CA43 /* glasses_sunglasses.tflite */ = {isa = PBXFileReference; lastKnownFileType = file; path = glasses_sunglasses.tflite; sourceTree = "<group>"; };
 		8BA5AAF92F978EF200511ED2 /* FrameDecoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FrameDecoder.swift; sourceTree = "<group>"; };
 		8BA5AAFA2F978EF200511ED2 /* HandAnalyzerBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HandAnalyzerBridge.swift; sourceTree = "<group>"; };
 		8BA5AAFB2F978EF200511ED2 /* MediaPipePlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaPipePlugin.swift; sourceTree = "<group>"; };
@@ -77,8 +81,6 @@
 		8BA5AB062F9932CF00511ED2 /* face_landmarker.task */ = {isa = PBXFileReference; lastKnownFileType = file; path = face_landmarker.task; sourceTree = "<group>"; };
 		8BA5AB082F97903500511ED2 /* FaceDetectorBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FaceDetectorBridge.swift; sourceTree = "<group>"; };
 		8BA5AB092F97903500511ED2 /* FaceLandmarkerBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FaceLandmarkerBridge.swift; sourceTree = "<group>"; };
-		9A0001112F978EF200511ED2 /* JpegEncoderBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JpegEncoderBridge.swift; sourceTree = "<group>"; };
-		9A0001132F978EF200511ED2 /* UprightRgbaBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UprightRgbaBridge.swift; sourceTree = "<group>"; };
 		9740EEB21CF90195004384FC /* Debug.xcconfig */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xcconfig; name = Debug.xcconfig; path = Flutter/Debug.xcconfig; sourceTree = "<group>"; };
 		9740EEB31CF90195004384FC /* Generated.xcconfig */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xcconfig; name = Generated.xcconfig; path = Flutter/Generated.xcconfig; sourceTree = "<group>"; };
 		97C146EE1CF9000F007C117D /* Runner.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Runner.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -86,6 +88,8 @@
 		97C146FD1CF9000F007C117D /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		97C147001CF9000F007C117D /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		97C147021CF9000F007C117D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		9A0001112F978EF200511ED2 /* JpegEncoderBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JpegEncoderBridge.swift; sourceTree = "<group>"; };
+		9A0001132F978EF200511ED2 /* UprightRgbaBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UprightRgbaBridge.swift; sourceTree = "<group>"; };
 		9B313E7F18A0FF63EBEF8BB0 /* Pods-RunnerTests.profile.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-RunnerTests.profile.xcconfig"; path = "Target Support Files/Pods-RunnerTests/Pods-RunnerTests.profile.xcconfig"; sourceTree = "<group>"; };
 		EC5697E7BE17812AA5D1279C /* Pods-Runner.profile.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Runner.profile.xcconfig"; path = "Target Support Files/Pods-Runner/Pods-Runner.profile.xcconfig"; sourceTree = "<group>"; };
 		F78D331D43CE7AFEA133B74C /* Pods-Runner.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Runner.debug.xcconfig"; path = "Target Support Files/Pods-Runner/Pods-Runner.debug.xcconfig"; sourceTree = "<group>"; };
@@ -131,6 +135,7 @@
 		8BA5AAFD2F978EF200511ED2 /* MediaPipe */ = {
 			isa = PBXGroup;
 			children = (
+				8B0FA0D52FD6CBF200B6CA43 /* GlassesClassifierBridge.swift */,
 				8BA5AAF92F978EF200511ED2 /* FrameDecoder.swift */,
 				8BA5AB082F97903500511ED2 /* FaceDetectorBridge.swift */,
 				8BA5AB092F97903500511ED2 /* FaceLandmarkerBridge.swift */,
@@ -178,6 +183,7 @@
 		97C146F01CF9000F007C117D /* Runner */ = {
 			isa = PBXGroup;
 			children = (
+				8B0FA0D72FD6CC1E00B6CA43 /* glasses_sunglasses.tflite */,
 				8BA5AB062F9932CF00511ED2 /* face_landmarker.task */,
 				8BA5AB022F978F3A00511ED2 /* efficientdet_lite0.tflite */,
 				8BA5AB032F978F3A00511ED2 /* hand_landmarker.task */,
@@ -309,6 +315,7 @@
 				8BA5AB042F978F3A00511ED2 /* hand_landmarker.task in Resources */,
 				8BA5AB052F978F3A00511ED2 /* efficientdet_lite0.tflite in Resources */,
 				8BA5AB072F9932CF00511ED2 /* face_landmarker.task in Resources */,
+				8B0FA0D82FD6CC1E00B6CA43 /* glasses_sunglasses.tflite in Resources */,
 				8BA5AB062F97903500511ED2 /* blaze_face_short_range.tflite in Resources */,
 				97C146FE1CF9000F007C117D /* Assets.xcassets in Resources */,
 				97C146FC1CF9000F007C117D /* Main.storyboard in Resources */,
@@ -448,6 +455,7 @@
 				8BA5AB002F978EF200511ED2 /* HandAnalyzerBridge.swift in Sources */,
 				8BA5AB012F978EF200511ED2 /* FrameDecoder.swift in Sources */,
 				8BA5AB072F97903500511ED2 /* FaceDetectorBridge.swift in Sources */,
+				8B0FA0D62FD6CBF200B6CA43 /* GlassesClassifierBridge.swift in Sources */,
 				8BA5AB0A2F97903500511ED2 /* FaceLandmarkerBridge.swift in Sources */,
 				9A0001122F978EF200511ED2 /* JpegEncoderBridge.swift in Sources */,
 				9A0001142F978EF200511ED2 /* UprightRgbaBridge.swift in Sources */,

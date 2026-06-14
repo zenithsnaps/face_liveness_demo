@@ -1,6 +1,7 @@
 package com.example.face_liveness_demo.mediapipe
 
 import android.content.Context
+import android.graphics.RectF
 import android.os.Handler
 import android.os.Looper
 import io.flutter.plugin.common.BinaryMessenger
@@ -29,6 +30,7 @@ object MediaPipePlugin {
     private var objectBridge: ObjectAnalyzerBridge? = null
     private var faceBridge: FaceDetectorBridge? = null
     private var faceLandmarkerBridge: FaceLandmarkerBridge? = null
+    private var glassesBridge: GlassesClassifierBridge? = null
     private var executor: ExecutorService? = null
 
     fun register(context: Context, binaryMessenger: BinaryMessenger) {
@@ -52,6 +54,17 @@ object MediaPipePlugin {
                         if (objectBridge == null) objectBridge = ObjectAnalyzerBridge(context)
                         if (faceBridge == null) faceBridge = FaceDetectorBridge(context)
                         if (faceLandmarkerBridge == null) faceLandmarkerBridge = FaceLandmarkerBridge(context)
+                        // Fail-soft: a missing/incompatible glasses model must not abort
+                        // initialize and take the core hand/face/object tasks down with it.
+                        // When absent, the sunglasses check skips itself (caller treats the
+                        // classify error as Err → fail-open).
+                        if (glassesBridge == null) {
+                            glassesBridge = try {
+                                GlassesClassifierBridge(context)
+                            } catch (_: Throwable) {
+                                null
+                            }
+                        }
                         postResult(result, null)
                     }
                     "detectHands" -> {
@@ -86,6 +99,23 @@ object MediaPipePlugin {
                         val landmarkResult = bridge.detect(frame)
                         postResult(result, landmarkResult)
                     }
+                    "classifyGlasses" -> {
+                        val bridge = glassesBridge ?: GlassesClassifierBridge(context).also { glassesBridge = it }
+                        val args = call.arguments as? Map<*, *>
+                            ?: return@execute postError(result, "BAD_ARGS", "expected Map")
+                        val frame = FrameArgs.fromMap(args)
+                        // Optional normalized [0,1] ROI: {left, top, width, height}.
+                        val roi = (args["roi"] as? Map<*, *>)?.let { r ->
+                            RectF(
+                                (r["left"] as Number).toFloat(),
+                                (r["top"] as Number).toFloat(),
+                                ((r["left"] as Number).toFloat() + (r["width"] as Number).toFloat()),
+                                ((r["top"] as Number).toFloat() + (r["height"] as Number).toFloat()),
+                            )
+                        }
+                        val proba = bridge.classify(frame, roi)
+                        postResult(result, proba)
+                    }
                     "encodeFrameToJpeg" -> {
                         val args = call.arguments as? Map<*, *>
                             ?: return@execute postError(result, "BAD_ARGS", "expected Map")
@@ -108,10 +138,12 @@ object MediaPipePlugin {
                         objectBridge?.close()
                         faceBridge?.close()
                         faceLandmarkerBridge?.close()
+                        glassesBridge?.close()
                         handBridge = null
                         objectBridge = null
                         faceBridge = null
                         faceLandmarkerBridge = null
+                        glassesBridge = null
                         postResult(result, null)
                     }
                     else -> postNotImplemented(result)

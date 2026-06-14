@@ -46,3 +46,8 @@ app.*.map.json
 
 # Supabase secrets
 .env.json
+
+# Glasses recalc: downloaded-frame cache (large, regenerable) + throwaway CSV backups
+tools/glasses_export/.frame_cache/
+results/*.bak
+results/*.recalc.bak
